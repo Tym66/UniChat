@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -24,12 +25,13 @@ import com.unichat.app.ui.theme.GraySecondary
 import com.unichat.app.ui.theme.OverlayFill
 
 /**
- * 底部悬浮半透明圆角操作栏:内置两个简约线性图标按钮
+ * 底部悬浮半透明圆角操作栏:三个简约线性图标按钮(聊天/模块/关于)
  */
 @Composable
 fun FloatingActionBar(
     onChatClick: () -> Unit,
     onModuleClick: () -> Unit,
+    onAboutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -39,7 +41,7 @@ fun FloatingActionBar(
             .clip(RoundedCornerShape(28.dp))
             .background(OverlayFill)
             .padding(horizontal = 24.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onChatClick) {
@@ -54,6 +56,14 @@ fun FloatingActionBar(
             Icon(
                 imageVector = Icons.Rounded.Extension,
                 contentDescription = "模块搜索",
+                tint = GraySecondary,
+                modifier = Modifier.size(26.dp)
+            )
+        }
+        IconButton(onClick = onAboutClick) {
+            Icon(
+                imageVector = Icons.Rounded.Info,
+                contentDescription = "关于",
                 tint = GraySecondary,
                 modifier = Modifier.size(26.dp)
             )

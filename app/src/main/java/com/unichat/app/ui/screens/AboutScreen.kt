@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -25,10 +26,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.unichat.app.BuildConfig
 import com.unichat.app.ui.components.CircleIconButton
 import com.unichat.app.ui.theme.GraySecondary
@@ -107,9 +110,50 @@ fun AboutScreen(
 
             // ===== 开发者信息卡片 =====
             InfoCard(title = "开发者") {
+                // GitHub 头像(方形圆角)
+                AsyncImage(
+                    model = "https://avatars.githubusercontent.com/Tym66",
+                    contentDescription = "开发者头像",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFFEDF0F3))
+                )
+                Spacer(modifier = Modifier.height(10.dp))
                 InfoRow(label = "作者", value = "Tym66")
                 InfoRow(label = "GitHub", value = "github.com/Tym66/UniChat", url = "https://github.com/Tym66/UniChat")
                 InfoRow(label = "开源协议", value = "MIT License")
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // ===== 打赏卡片 =====
+            InfoCard(title = "打赏支持") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.Favorite,
+                        contentDescription = null,
+                        tint = Color(0xFFE53950),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "如果 UniChat 对你有帮助,可以请作者喝杯咖啡 ☕",
+                        fontSize = 12.sp,
+                        color = GraySecondary
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                // 微信收款码
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(com.unichat.app.R.drawable.pay_qr),
+                    contentDescription = "微信收款码",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                )
             }
             Spacer(modifier = Modifier.height(14.dp))
 

@@ -6,13 +6,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,33 +22,35 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.unichat.app.data.Contact
-import com.unichat.app.data.ModuleInfo
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.unichat.app.ui.ChatDetailViewModel
 import com.unichat.app.ui.ChatViewModel
 import com.unichat.app.ui.ModuleViewModel
+import com.unichat.app.ui.ThemeManager
+import com.unichat.app.ui.ThemeMode
 import com.unichat.app.ui.components.FloatingActionBar
+import com.unichat.app.ui.screens.AboutScreen
 import com.unichat.app.ui.screens.ChatDetailScreen
 import com.unichat.app.ui.screens.ChatListScreen
 import com.unichat.app.ui.screens.ModuleSearchScreen
+import com.unichat.app.ui.screens.SettingsScreen
 import com.unichat.app.ui.theme.UniChatTheme
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.ui.graphics.Color
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Info
-import com.unichat.app.ui.components.CircleIconButton
-import com.unichat.app.ui.screens.AboutScreen
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val themeManager = ThemeManager(applicationContext)
         setContent {
-            UniChatTheme {
-                MainScreen()
+            val systemDark = isSystemInDarkTheme()
+            val dark = when (themeManager.mode) {
+                ThemeMode.DARK -> true
+                ThemeMode.LIGHT -> false
+                else -> systemDark
+            }
+            UniChatTheme(darkTheme = dark) {
+                MainScreen(themeManager)
             }
         }
     }
@@ -56,7 +59,7 @@ class MainActivity : ComponentActivity() {
 private enum class Tab { CHAT, MODULE }
 
 @Composable
-private fun MainScreen() {
+private fun MainScreen(themeManager: ThemeManager) {
     val context = LocalContext.current
     val chatVm: ChatViewModel = viewModel { ChatViewModel(UniChatApp.instance.database) }
     val moduleVm: ModuleViewModel = viewModel { ModuleViewModel(UniChatApp.instance.database) }
@@ -65,6 +68,7 @@ private fun MainScreen() {
     var detailContactId by remember { mutableStateOf(-1L) }
     var inDetail by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
 
     val detailVm: ChatDetailViewModel = viewModel { ChatDetailViewModel(UniChatApp.instance.database) }
     val contacts by chatVm.contacts.collectAsState()
@@ -78,10 +82,17 @@ private fun MainScreen() {
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
+            showSettings -> {
+                SettingsScreen(
+                    currentMode = themeManager.mode,
+                    onModeChange = { themeManager.updateMode(it) },
+                    onBack = { showSettings = false }
+                )
+            }
             showAbout -> {
                 AboutScreen(
                     onBack = { showAbout = false },
-                    onSettingsClick = { /* 设置页后续版本 */ }
+                    onSettingsClick = { showSettings = true }
                 )
             }
             inDetail -> {
@@ -103,24 +114,15 @@ private fun MainScreen() {
             }
             tab == Tab.CHAT -> {
                 val query by chatVm.queryState.collectAsState()
-                Box(modifier = Modifier.fillMaxSize()) {
-                    ChatListScreen(
-                        contacts = contacts,
-                        query = query,
-                        onQueryChange = { chatVm.setQuery(it) },
-                        onContactClick = {
-                            detailContactId = it.id
-                            inDetail = true
-                        }
-                    )
-                    // 右上角圆形“关于”入口
-                    CircleIconButton(
-                        icon = Icons.Rounded.Info,
-                        contentDescription = "关于",
-                        onClick = { showAbout = true },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(end = 20.dp, top = 16.dp)
-                    )
-                }
+                ChatListScreen(
+                    contacts = contacts,
+                    query = query,
+                    onQueryChange = { chatVm.setQuery(it) },
+                    onContactClick = {
+                        detailContactId = it.id
+                        inDetail = true
+                    }
+                )
             }
             else -> {
                 val query by moduleVm.queryState.collectAsState()
@@ -139,11 +141,12 @@ private fun MainScreen() {
             }
         }
 
-        // 底部悬浮操作栏
-        if (!inDetail) {
+        // 底部悬浮操作栏(聊天/模块/关于)
+        if (!inDetail && !showAbout && !showSettings) {
             FloatingActionBar(
                 onChatClick = { tab = Tab.CHAT },
                 onModuleClick = { tab = Tab.MODULE },
+                onAboutClick = { showAbout = true },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 28.dp)

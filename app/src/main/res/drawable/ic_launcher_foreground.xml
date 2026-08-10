@@ -8,18 +8,12 @@
     <path
         android:fillColor="#1677FF"
         android:pathData="M24,0 L84,0 A24,24 0 0 1 108,24 L108,84 A24,24 0 0 1 84,108 L24,108 A24,24 0 0 1 0,84 L0,24 A24,24 0 0 1 24,0 Z" />
-    <!-- 聊天气泡 -->
+    <!-- Y 字母(左侧,白色) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M30,32 A6,6 0 0 1 36,26 L72,26 A6,6 0 0 1 78,32 L78,60 A6,6 0 0 1 72,66 L48,66 L36,76 L38,66 L36,66 A6,6 0 0 1 30,60 Z" />
-    <!-- 气泡内三点 -->
+        android:pathData="M26,30 L44,30 L54,52 L64,30 L82,30 L64,60 L64,78 L52,78 L52,60 Z" />
+    <!-- M 字母(右侧,浅蓝) -->
     <path
-        android:fillColor="#1677FF"
-        android:pathData="M42,43 m-3,0 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0" />
-    <path
-        android:fillColor="#1677FF"
-        android:pathData="M54,43 m-3,0 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0" />
-    <path
-        android:fillColor="#1677FF"
-        android:pathData="M66,43 m-3,0 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0" />
+        android:fillColor="#BBD8FF"
+        android:pathData="M70,78 L70,46 L76,58 L82,46 L82,78 L92,78 L92,30 L82,30 L76,44 L70,30 L60,30 L60,78 Z" />
 </vector>
