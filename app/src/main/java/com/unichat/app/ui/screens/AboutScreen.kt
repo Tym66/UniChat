@@ -1,0 +1,212 @@
+package com.unichat.app.ui.screens
+
+import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.unichat.app.BuildConfig
+import com.unichat.app.ui.components.CircleIconButton
+import com.unichat.app.ui.theme.GraySecondary
+import com.unichat.app.ui.theme.InkBlack
+
+/**
+ * 《关于》页面
+ *
+ * UI 规格:
+ * - 左上角大号粗体标题"关于",右上角齿轮设置图标
+ * - 居中蓝色矢量艺术字母 YM Logo + 软件名 UniChat + slogan + 版本号
+ * - 下方圆角信息卡片:开发者信息(GitHub 链接)、设备系统信息
+ * - 纯白背景、大量留白、扁平化、微弱圆角、无阴影
+ */
+@Composable
+fun AboutScreen(
+    onBack: () -> Unit,
+    onSettingsClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxSize().background(Color.White)) {
+
+        // ===== 顶部:左上标题 + 右上齿轮 =====
+        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+            Text(
+                text = "关于",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = InkBlack
+            )
+            CircleIconButton(
+                icon = Icons.Rounded.Settings,
+                contentDescription = "设置",
+                onClick = onSettingsClick,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // ===== 居中 YM Logo =====
+            Spacer(modifier = Modifier.height(28.dp))
+            YmLogo()
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // ===== 软件名称 =====
+            Text(
+                text = "UniChat",
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Bold,
+                color = InkBlack
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // ===== slogan =====
+            Text(
+                text = "聚合微信 · 抖音,一个会话搞定",
+                fontSize = 13.sp,
+                color = GraySecondary
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // ===== 版本号 =====
+            Text(
+                text = "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                fontSize = 11.sp,
+                color = GraySecondary
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // ===== 开发者信息卡片 =====
+            InfoCard(title = "开发者") {
+                InfoRow(label = "作者", value = "Tym66")
+                InfoRow(label = "GitHub", value = "github.com/Tym66/UniChat", url = "https://github.com/Tym66/UniChat")
+                InfoRow(label = "开源协议", value = "MIT License")
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // ===== 设备系统信息卡片 =====
+            InfoCard(title = "设备信息") {
+                InfoRow(label = "机型", value = "${Build.MANUFACTURER} ${Build.MODEL}")
+                InfoRow(label = "系统", value = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                InfoRow(label = "架构", value = Build.SUPPORTED_ABIS.firstOrNull() ?: "未知")
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // ===== 功能信息卡片 =====
+            InfoCard(title = "功能") {
+                InfoRow(label = "聊天聚合", value = "微信 + 抖音 同人会话")
+                InfoRow(label = "模块搜索", value = "Magisk / LSPosed 仓库")
+            }
+            Spacer(modifier = Modifier.height(28.dp))
+
+            Text(
+                text = "仅供学习研究,请勿用于违规用途\n微信、抖音为各自公司商标,本工具与其无任何关联",
+                fontSize = 10.sp,
+                color = GraySecondary,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+/** 蓝色矢量艺术字母 YM Logo */
+@Composable
+fun YmLogo(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(88.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(Color(0xFF1677FF)),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Y",
+                fontSize = 40.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White
+            )
+            Text(
+                text = "M",
+                fontSize = 40.sp,
+                fontWeight = FontWeight.Black,
+                color = Color(0xFFBBD8FF)
+            )
+        }
+    }
+}
+
+/** 圆角信息卡片 */
+@Composable
+private fun InfoCard(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFFF7F8FA))
+            .padding(horizontal = 18.dp, vertical = 14.dp)
+    ) {
+        Text(
+            text = title,
+            fontSize = 12.sp,
+            color = GraySecondary
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        content()
+    }
+}
+
+/** 信息行:label 左 / value 右 */
+@Composable
+private fun InfoRow(
+    label: String,
+    value: String,
+    url: String? = null
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = label, fontSize = 13.sp, color = GraySecondary)
+        Text(
+            text = value,
+            fontSize = 13.sp,
+            color = if (url != null) Color(0xFF1677FF) else InkBlack,
+            fontWeight = if (url != null) FontWeight.Medium else FontWeight.Normal,
+            textAlign = TextAlign.End
+        )
+    }
+}

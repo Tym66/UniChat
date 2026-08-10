@@ -35,6 +35,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Info
+import com.unichat.app.ui.components.CircleIconButton
+import com.unichat.app.ui.screens.AboutScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -60,6 +64,7 @@ private fun MainScreen() {
     var tab by remember { mutableStateOf(Tab.CHAT) }
     var detailContactId by remember { mutableStateOf(-1L) }
     var inDetail by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
 
     val detailVm: ChatDetailViewModel = viewModel { ChatDetailViewModel(UniChatApp.instance.database) }
     val contacts by chatVm.contacts.collectAsState()
@@ -73,6 +78,12 @@ private fun MainScreen() {
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
+            showAbout -> {
+                AboutScreen(
+                    onBack = { showAbout = false },
+                    onSettingsClick = { /* 设置页后续版本 */ }
+                )
+            }
             inDetail -> {
                 val contact = contacts.firstOrNull { it.id == detailContactId }
                 LaunchedEffect(detailContactId) {
@@ -92,15 +103,24 @@ private fun MainScreen() {
             }
             tab == Tab.CHAT -> {
                 val query by chatVm.queryState.collectAsState()
-                ChatListScreen(
-                    contacts = contacts,
-                    query = query,
-                    onQueryChange = { chatVm.setQuery(it) },
-                    onContactClick = {
-                        detailContactId = it.id
-                        inDetail = true
-                    }
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    ChatListScreen(
+                        contacts = contacts,
+                        query = query,
+                        onQueryChange = { chatVm.setQuery(it) },
+                        onContactClick = {
+                            detailContactId = it.id
+                            inDetail = true
+                        }
+                    )
+                    // 右上角圆形“关于”入口
+                    CircleIconButton(
+                        icon = Icons.Rounded.Info,
+                        contentDescription = "关于",
+                        onClick = { showAbout = true },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(end = 20.dp, top = 16.dp)
+                    )
+                }
             }
             else -> {
                 val query by moduleVm.queryState.collectAsState()
