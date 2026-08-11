@@ -15,17 +15,18 @@ import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.unichat.app.ui.theme.GraySecondary
 import com.unichat.app.ui.theme.OverlayFill
 
 /**
  * 底部悬浮半透明圆角操作栏:三个简约线性图标按钮(聊天/模块/关于)
+ * 跟随主题:暗色下用深色半透明底 + 浅色图标
  */
 @Composable
 fun FloatingActionBar(
@@ -34,12 +35,18 @@ fun FloatingActionBar(
     onAboutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val bg = if (MaterialTheme.colorScheme.background == Color.White) {
+        OverlayFill // 浅色:半透明白
+    } else {
+        Color(0xCC1E1E1E) // 深色:半透明深灰
+    }
+    val tint = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
             .clip(RoundedCornerShape(28.dp))
-            .background(OverlayFill)
+            .background(bg)
             .padding(horizontal = 24.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
@@ -48,7 +55,7 @@ fun FloatingActionBar(
             Icon(
                 imageVector = Icons.Rounded.ChatBubbleOutline,
                 contentDescription = "聊天聚合",
-                tint = GraySecondary,
+                tint = tint,
                 modifier = Modifier.size(26.dp)
             )
         }
@@ -56,7 +63,7 @@ fun FloatingActionBar(
             Icon(
                 imageVector = Icons.Rounded.Extension,
                 contentDescription = "模块搜索",
-                tint = GraySecondary,
+                tint = tint,
                 modifier = Modifier.size(26.dp)
             )
         }
@@ -64,14 +71,14 @@ fun FloatingActionBar(
             Icon(
                 imageVector = Icons.Rounded.Info,
                 contentDescription = "关于",
-                tint = GraySecondary,
+                tint = tint,
                 modifier = Modifier.size(26.dp)
             )
         }
     }
 }
 
-/** 右上角圆形功能图标按钮 */
+/** 右上角圆形功能图标按钮(跟随主题) */
 @Composable
 fun CircleIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -83,18 +90,16 @@ fun CircleIconButton(
         modifier = modifier
             .size(40.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFFF2F3F5)),
+            .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center
     ) {
         IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
-                tint = InkBlack,
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(20.dp)
             )
         }
     }
 }
-
-private val InkBlack = Color(0xFF1A1A1A)

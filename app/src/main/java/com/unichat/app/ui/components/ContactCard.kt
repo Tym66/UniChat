@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,10 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unichat.app.data.Contact
 import com.unichat.app.data.Platform
-import com.unichat.app.ui.theme.GraySecondary
-import com.unichat.app.ui.theme.InkBlack
 
-/** 聊天列表联系人卡片:头像 + 名称 + 平台角标 + 未读红点 */
+/** 聊天列表联系人卡片:头像 + 名称 + 平台角标 + 未读红点(跟随主题) */
 @Composable
 fun ContactCard(
     contact: Contact,
@@ -45,7 +44,7 @@ fun ContactCard(
                 interactionSource = MutableInteractionSource()
             )
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -54,12 +53,12 @@ fun ContactCard(
             modifier = Modifier
                 .size(46.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF1677FF)),
+                .background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = contact.name.take(1).ifBlank { "?" },
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -69,7 +68,7 @@ fun ContactCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = contact.name.ifBlank { "未知联系人" },
-                    color = InkBlack,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -81,7 +80,7 @@ fun ContactCard(
             Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = contact.lastMessage.ifBlank { "暂无消息" },
-                color = GraySecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -111,6 +110,7 @@ fun ContactCard(
 private fun PlatformBadge(platforms: String) {
     val list = platforms.split(",").filter { it.isNotBlank() }
     if (list.isEmpty()) return
+    val primary = MaterialTheme.colorScheme.primary
     Row {
         list.forEach { p ->
             val label = when (p) {
@@ -120,12 +120,12 @@ private fun PlatformBadge(platforms: String) {
             }
             Text(
                 text = label,
-                color = Color(0xFF1677FF),
+                color = primary,
                 fontSize = 9.sp,
                 modifier = Modifier
                     .padding(end = 4.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFFEAF2FF))
+                    .background(primary.copy(alpha = 0.1f))
                     .padding(horizontal = 4.dp, vertical = 1.dp)
             )
         }

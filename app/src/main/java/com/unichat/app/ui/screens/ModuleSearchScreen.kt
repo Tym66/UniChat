@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,8 +21,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,10 +39,8 @@ import com.unichat.app.ui.components.CircleIconButton
 import com.unichat.app.ui.components.ModuleCard
 import com.unichat.app.ui.components.SectionTitle
 import com.unichat.app.ui.components.UniSearchBar
-import com.unichat.app.ui.theme.GraySecondary
-import com.unichat.app.ui.theme.InkBlack
 
-/** 模块搜索页:大标题居中 + 右上刷新 + 分类切换 + 搜索 + 模块卡片列表 */
+/** 模块搜索页:大标题居中 + 右上刷新 + 分类切换 + 搜索 + 模块卡片列表(顶栏避让摄像头) */
 @Composable
 fun ModuleSearchScreen(
     modules: List<ModuleInfo>,
@@ -54,13 +55,18 @@ fun ModuleSearchScreen(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        // 顶部:居中大标题 + 右上角圆形刷新按钮
-        Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        // 顶部:居中大标题 + 右上角圆形刷新按钮(避让摄像头)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(top = 12.dp)
+        ) {
             Text(
                 text = "模块",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = InkBlack,
+                color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -86,19 +92,23 @@ fun ModuleSearchScreen(
         when {
             loading && modules.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(strokeWidth = 2.dp, color = Color(0xFF1677FF))
+                    CircularProgressIndicator(strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
                 }
             }
             error != null && modules.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = error, color = GraySecondary, fontSize = 13.sp)
+                        Text(
+                            text = error,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 13.sp
+                        )
                         Text(
                             text = "点击右上角重试",
-                            color = Color(0xFF1677FF),
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 13.sp,
                             modifier = Modifier.padding(top = 8.dp).clickable(
-                                interactionSource = androidx.compose.runtime.remember { MutableInteractionSource() },
+                                interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 onClick = onRefresh
                             )
@@ -124,7 +134,7 @@ fun ModuleSearchScreen(
                             Box(modifier = Modifier.fillMaxWidth().padding(top = 80.dp), contentAlignment = Alignment.Center) {
                                 Text(
                                     text = "暂无数据\n点击右上角刷新从 GitHub 拉取",
-                                    color = GraySecondary,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 13.sp,
                                     textAlign = TextAlign.Center
                                 )
@@ -150,12 +160,13 @@ private fun CategoryChip(
     onSelect: (String) -> Unit
 ) {
     val selected = current == value
+    val primary = MaterialTheme.colorScheme.primary
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(if (selected) Color(0xFF1677FF) else Color(0xFFF2F3F5))
+            .background(if (selected) primary else MaterialTheme.colorScheme.surfaceVariant)
             .clickable(
-                interactionSource = androidx.compose.runtime.remember { MutableInteractionSource() },
+                interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { onSelect(value) }
             .padding(horizontal = 16.dp, vertical = 6.dp)
@@ -163,7 +174,7 @@ private fun CategoryChip(
         Text(
             text = label,
             fontSize = 12.sp,
-            color = if (selected) Color.White else GraySecondary,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
         )
     }

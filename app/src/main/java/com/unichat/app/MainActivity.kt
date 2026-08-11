@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -20,8 +21,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.unichat.app.ui.ChatDetailViewModel
 import com.unichat.app.ui.ChatViewModel
@@ -50,6 +54,15 @@ class MainActivity : ComponentActivity() {
                 else -> systemDark
             }
             UniChatTheme(darkTheme = dark) {
+                // 系统栏图标颜色跟随主题
+                val view = LocalView.current
+                LaunchedEffect(dark) {
+                    val window = (view.context as? android.app.Activity)?.window ?: return@LaunchedEffect
+                    WindowCompat.getInsetsController(window, view).apply {
+                        isAppearanceLightStatusBars = !dark
+                        isAppearanceLightNavigationBars = !dark
+                    }
+                }
                 MainScreen(themeManager)
             }
         }

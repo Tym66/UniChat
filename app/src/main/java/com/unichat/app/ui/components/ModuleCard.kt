@@ -1,8 +1,8 @@
 package com.unichat.app.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,15 +29,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unichat.app.data.ModuleCategory
 import com.unichat.app.data.ModuleInfo
-import com.unichat.app.ui.theme.GraySecondary
-import com.unichat.app.ui.theme.GrayTertiary
-import com.unichat.app.ui.theme.InkBlack
-import com.unichat.app.ui.theme.SearchBarFill
 
 /**
  * 模块列表卡片:
  * 左侧方形圆角图标 / 右侧两行(加粗名称 + 浅灰包名) / 最右灰色 ">"
- * 卡片几乎无阴影,轻微圆角,大量留白。
+ * 卡片几乎无阴影,轻微圆角,大量留白。颜色跟随主题。
  */
 @Composable
 fun ModuleCard(
@@ -45,7 +42,7 @@ fun ModuleCard(
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(
                 onClick = onClick,
@@ -53,7 +50,7 @@ fun ModuleCard(
                 interactionSource = MutableInteractionSource()
             )
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -77,7 +74,7 @@ fun ModuleCard(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = module.name,
-                color = InkBlack,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -86,7 +83,7 @@ fun ModuleCard(
             Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = module.packageName.ifBlank { module.author },
-                color = GraySecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -97,7 +94,7 @@ fun ModuleCard(
         Icon(
             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
             contentDescription = "进入",
-            tint = GrayTertiary,
+            tint = MaterialTheme.colorScheme.outline,
             modifier = Modifier.size(22.dp)
         )
     }

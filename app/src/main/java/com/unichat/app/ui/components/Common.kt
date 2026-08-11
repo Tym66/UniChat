@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -22,11 +23,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.unichat.app.ui.theme.GraySecondary
-import com.unichat.app.ui.theme.InkBlack
-import com.unichat.app.ui.theme.SearchBarFill
 
-/** 浅灰色圆角搜索框:内置放大镜图标 + 占位文字 */
+/** 浅灰色圆角搜索框:内置放大镜图标 + 占位文字(跟随主题) */
 @Composable
 fun UniSearchBar(
     value: String,
@@ -39,21 +37,21 @@ fun UniSearchBar(
             .fillMaxWidth()
             .height(44.dp)
             .clip(RoundedCornerShape(22.dp))
-            .background(SearchBarFill)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Rounded.Search,
             contentDescription = "搜索",
-            tint = GraySecondary,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp)
         )
         Box(modifier = Modifier.padding(start = 8.dp)) {
             if (value.isEmpty()) {
                 Text(
                     text = placeholder,
-                    color = GraySecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp
                 )
             }
@@ -61,20 +59,20 @@ fun UniSearchBar(
                 value = value,
                 onValueChange = onValueChange,
                 singleLine = true,
-                textStyle = TextStyle(color = InkBlack, fontSize = 14.sp),
-                cursorBrush = SolidColor(InkBlack),
+                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
                 modifier = Modifier.fillMaxWidth()
             )
         }
     }
 }
 
-/** 板块小标题:浅灰色小号文字,无分割线 */
+/** 板块小标题:浅灰色小号文字,无分割线(跟随主题) */
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
-        color = GraySecondary,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontSize = 12.sp,
         modifier = modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp)
     )

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -31,19 +33,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unichat.app.ui.ThemeMode
-import com.unichat.app.ui.theme.GraySecondary
-import com.unichat.app.ui.theme.InkBlack
 
-/** 设置页:主题选择(跟随系统 / 日间 / 夜间) */
+/** 设置页:主题选择(跟随系统 / 日间 / 夜间),颜色跟随主题 */
 @Composable
 fun SettingsScreen(
     currentMode: String,
     onModeChange: (String) -> Unit,
     onBack: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        // 顶部:返回 + 居中标题
-        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        // 顶部:返回 + 居中标题(避让摄像头)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(start = 8.dp, end = 8.dp)
+                .padding(vertical = 12.dp)
+        ) {
             Row(
                 modifier = Modifier.align(Alignment.CenterStart),
                 verticalAlignment = Alignment.CenterVertically
@@ -51,7 +57,7 @@ fun SettingsScreen(
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
                     contentDescription = "返回",
-                    tint = InkBlack,
+                    tint = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier
                         .size(28.dp)
                         .clip(RoundedCornerShape(14.dp))
@@ -66,7 +72,7 @@ fun SettingsScreen(
                 text = "设置",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = InkBlack,
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.align(Alignment.Center)
             )
         }
@@ -75,7 +81,7 @@ fun SettingsScreen(
             Text(
                 text = "主题",
                 fontSize = 12.sp,
-                color = GraySecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp)
             )
 
@@ -84,7 +90,7 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(18.dp))
-                    .background(Color(0xFFF7F8FA))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(vertical = 6.dp)
             ) {
                 ThemeOption(
@@ -114,7 +120,7 @@ fun SettingsScreen(
             Text(
                 text = "更多设置即将上线",
                 fontSize = 11.sp,
-                color = GraySecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
         }
@@ -129,6 +135,7 @@ private fun ThemeOption(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val primary = MaterialTheme.colorScheme.primary
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -144,27 +151,36 @@ private fun ThemeOption(
             modifier = Modifier
                 .size(38.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (selected) Color(0xFF1677FF) else Color(0xFFEDF0F3)),
+                .background(if (selected) primary else MaterialTheme.colorScheme.surface),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (selected) Color.White else GraySecondary,
+                tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
         }
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = InkBlack)
-            Text(text = desc, fontSize = 11.sp, color = GraySecondary)
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = desc,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         // 选中圆点
         Box(
             modifier = Modifier
                 .size(20.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(if (selected) Color(0xFF1677FF) else Color(0xFFDDDDDD)),
+                .background(if (selected) primary else MaterialTheme.colorScheme.outlineVariant),
             contentAlignment = Alignment.Center
         ) {
             if (selected) {
@@ -172,7 +188,7 @@ private fun ThemeOption(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(Color.White)
+                        .background(MaterialTheme.colorScheme.onPrimary)
                 )
             }
         }

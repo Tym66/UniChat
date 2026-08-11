@@ -1,6 +1,8 @@
 package com.unichat.app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,20 +12,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,14 +42,11 @@ import com.unichat.app.data.Platform
 import com.unichat.app.ui.components.ContactCard
 import com.unichat.app.ui.components.SectionTitle
 import com.unichat.app.ui.components.UniSearchBar
-import com.unichat.app.ui.theme.GraySecondary
-import com.unichat.app.ui.theme.InkBlack
-import com.unichat.app.ui.theme.SearchBarFill
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** 聊天聚合页:顶部大标题居中 + 搜索框 + 联系人卡片列表 */
+/** 聊天聚合页:顶部大标题居中 + 搜索框 + 联系人卡片列表(顶栏避让摄像头) */
 @Composable
 fun ChatListScreen(
     contacts: List<Contact>,
@@ -57,13 +56,18 @@ fun ChatListScreen(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        // 顶部大标题(居中)
-        Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        // 顶部大标题(居中),顶部 padding 避让状态栏/摄像头
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(top = 12.dp)
+        ) {
             Text(
                 text = "聊天",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = InkBlack,
+                color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -95,7 +99,7 @@ fun ChatListScreen(
     }
 }
 
-/** 单聊详情:跨平台消息按时间线合并展示 */
+/** 单聊详情:跨平台消息按时间线合并展示,支持返回键 */
 @Composable
 fun ChatDetailScreen(
     contact: Contact?,
@@ -105,17 +109,34 @@ fun ChatDetailScreen(
     modifier: Modifier = Modifier
 ) {
     val name = contact?.name ?: "联系人"
-    Column(modifier = modifier.fillMaxSize().background(Color.White)) {
-        // 顶栏:返回 + 居中标题 + 平台信息
+    // 系统返回键支持
+    BackHandler(onBack = onBack)
+
+    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        // 顶栏:返回按钮 + 居中标题(避让摄像头)
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(start = 4.dp, end = 8.dp)
+                .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            androidx.compose.material3.TextButton(onClick = onBack) {
-                Text("‹", fontSize = 28.sp, color = InkBlack)
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                    contentDescription = "返回",
+                    tint = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.size(26.dp)
+                )
             }
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = InkBlack)
+                Text(
+                    text = name,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
                 contact?.let { c ->
                     if (c.platforms.isNotBlank()) {
                         Text(
@@ -123,7 +144,7 @@ fun ChatDetailScreen(
                                 if (it == Platform.WECHAT) "微信" else "抖音"
                             } + " 聚合",
                             fontSize = 10.sp,
-                            color = GraySecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -132,7 +153,7 @@ fun ChatDetailScreen(
         }
         androidx.compose.material3.HorizontalDivider(
             thickness = 0.5.dp,
-            color = Color(0xFFEEEEEE)
+            color = MaterialTheme.colorScheme.outlineVariant
         )
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -156,15 +177,17 @@ fun ChatDetailScreen(
 private fun MessageBubble(msg: Message) {
     val isOut = msg.direction == Direction.OUT
     val platformTag = if (msg.platform == Platform.WECHAT) "微信" else "抖音"
+    val bubbleColor = if (isOut) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    val textColor = if (isOut) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isOut) androidx.compose.foundation.layout.Arrangement.End else androidx.compose.foundation.layout.Arrangement.Start
+        horizontalArrangement = if (isOut) Arrangement.End else Arrangement.Start
     ) {
         Column(horizontalAlignment = if (isOut) Alignment.End else Alignment.Start) {
             Text(
                 text = "$platformTag · ${formatTime(msg.timestamp)}",
                 fontSize = 9.sp,
-                color = GraySecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
             )
             Box(
@@ -176,13 +199,13 @@ private fun MessageBubble(msg: Message) {
                             bottomEnd = if (isOut) 4.dp else 14.dp
                         )
                     )
-                    .background(if (isOut) Color(0xFF1677FF) else Color(0xFFF2F3F5))
+                    .background(bubbleColor)
                     .padding(horizontal = 14.dp, vertical = 9.dp)
             ) {
                 Text(
                     text = displayContent(msg),
                     fontSize = 14.sp,
-                    color = if (isOut) Color.White else InkBlack,
+                    color = textColor,
                     lineHeight = 20.sp
                 )
             }
@@ -210,13 +233,13 @@ private fun EmptyHint(text: String) {
             Icon(
                 imageVector = Icons.Rounded.Info,
                 contentDescription = null,
-                tint = Color(0xFFDDDDDD),
+                tint = MaterialTheme.colorScheme.outlineVariant,
                 modifier = Modifier.size(48.dp)
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = text,
-                color = GraySecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center
             )
