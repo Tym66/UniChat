@@ -3,7 +3,11 @@ package com.unichat.app
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
+import android.content.Intent
+import androidx.core.content.ContextCompat
 import com.unichat.app.data.AppDatabase
+import com.unichat.app.sync.KeepAliveService
 
 class UniChatApp : Application() {
 
@@ -19,6 +23,7 @@ class UniChatApp : Application() {
         super.onCreate()
         instance = this
         createNotificationChannel()
+        startKeepAlive()
     }
 
     private fun createNotificationChannel() {
@@ -28,5 +33,14 @@ class UniChatApp : Application() {
             NotificationManager.IMPORTANCE_HIGH
         ).apply { description = "微信/抖音聚合后的新消息提醒" }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+    }
+
+    /** 启动后台保活前台服务(避免被 HyperOS 冻结) */
+    private fun startKeepAlive() {
+        KeepAliveService.ensureChannel(getSystemService(NotificationManager::class.java))
+        ContextCompat.startForegroundService(
+            this,
+            Intent(this, KeepAliveService::class.java)
+        )
     }
 }

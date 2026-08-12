@@ -13,6 +13,10 @@ import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.io.File
+import org.json.JSONObject
 
 /**
  * Xposed 入口。
@@ -61,7 +65,7 @@ class XposedInit : IXposedHookLoadPackage {
 object SqliteHook {
 
     /** 诊断模式:记录微信/抖音所有数据库写入路径(用于定位真实写库 API,上线置 false) */
-    private const val DIAG = false
+    private const val DIAG = true
 
     private val installed = ConcurrentHashMap.newKeySet<String>()
 
@@ -80,6 +84,11 @@ object SqliteHook {
                 return size > 256
             }
         }
+    }
+
+    /** 上报失败后的重试调度(UniChat 被 HyperOS 冻结时,解冻后补上报) */
+    private val retryExecutor = Executors.newSingleThreadScheduledExecutor { r ->
+        Thread(r, "UniChat-retry").apply { isDaemon = true }
     }
 
     /** 各平台:消息表名集合 */
@@ -110,7 +119,7 @@ object SqliteHook {
 
     /** 消息 ID 候选列(优先大字段,避免 HashSet 顺序不确定导致选到行 id) */
     private val msgIdColumns = listOf(
-        "msgId", "msgSvrId", "msg_id", "messageId", "clientMsgId", "id"
+        "msg_uuid", "msg_server_id", "msgId", "msgSvrId", "msg_id", "messageId", "clientMsgId", "id"
     )
 
     /** 会话(对端)ID 候选列 */
@@ -119,7 +128,7 @@ object SqliteHook {
     )
 
     /** 时间戳候选列 */
-    private val tsColumns = listOf("createTime", "create_time", "timestamp", "msgTime")
+    private val tsColumns = listOf("created_time", "createTime", "create_time", "timestamp", "msgTime")
 
     /** 内容候选列 */
     private val contentColumns = listOf("content", "text", "summary")
@@ -188,7 +197,11 @@ object SqliteHook {
                     val table = param.args[0] as? String ?: return
                     val values = param.args.firstOrNull { it is ContentValues } as? ContentValues ?: return
                     if (DIAG) {
-                        XposedBridge.log("[UniChat][w] INSERT ${cl.simpleName} 表=$table keys=${values.keySet().take(10)}")
+                        val keys = values.keySet().joinToString(",") { k ->
+                            val v = values.get(k)?.toString()?.take(60) ?: "null"
+                            "$k=$v"
+                        }
+                        XposedBridge.log("[UniChat][w] INSERT ${cl.simpleName} 表=$table ${keys.take(900)}")
                     }
                     if (table in messageTables[platform].orEmpty()) {
                         XposedBridge.log("[UniChat] 捕获消息写入: ${cl.simpleName} 表=$table")
@@ -338,6 +351,11 @@ object SqliteHook {
     // ==================== 消息 ====================
 
     private fun reportMessage(platform: String, values: ContentValues) {
+        // 抖音 msg 表字段差异大,单独处理(真实私信)
+        if (platform == Platform.DOUYIN && values.containsKey("msg_uuid")) {
+            reportDouyinMsg(values)
+            return
+        }
         val peerId = firstValue(values, peerIdColumns)?.toString() ?: return
         val msgId = firstValue(values, msgIdColumns)?.toString() ?: return
         val ts = toTimestamp(firstValue(values, tsColumns))
@@ -366,6 +384,83 @@ object SqliteHook {
         XposedBridge.log("[UniChat] 上报消息: $platform peer=$peerId type=$msgType dir=$direction ts=$ts content=${content.take(30)}")
 
         sendToApp(bundle, UniChatProvider.METHOD_INGEST_MESSAGE)
+    }
+
+    /** 抖音真实私信(msg 表):字段与微信差异大,单独解析 */
+    private fun reportDouyinMsg(values: ContentValues) {
+        val msgId = firstValue(values, listOf("msg_uuid", "msg_server_id", "index_in_conversation"))?.toString() ?: return
+        val convId = firstValue(values, listOf("conversation_id", "conversation_short_id"))?.toString() ?: return
+        val sender = values.get("sender")?.toString()
+        val created = values.get("created_time")?.toString()?.toLongOrNull()
+            ?: values.get("create_time")?.toString()?.toLongOrNull()
+            ?: System.currentTimeMillis()
+        val rawContent = values.get("content")?.toString() ?: ""
+        val text = extractDouyinText(rawContent)
+        val msgType = mapDyType(values.get("type")?.toString())
+
+        if (text.isBlank() && msgType == MsgType.TEXT) return
+
+        // 方向:conversation_id 格式 "0:1:<对端>:<自己>",sender == 自己 → OUT
+        val selfId = convId.split(":").lastOrNull()
+        val isOut = !sender.isNullOrBlank() && sender == selfId
+
+        val bundle = Bundle()
+        bundle.putString(UniChatProvider.KEY_PLATFORM, Platform.DOUYIN)
+        bundle.putString(UniChatProvider.KEY_PEER_ID, convId)
+        bundle.putString(UniChatProvider.KEY_PLATFORM_MSG_ID, msgId)
+        bundle.putLong(UniChatProvider.KEY_TIMESTAMP, if (created < 1_000_000_000_000L) created * 1000 else created)
+        bundle.putString(UniChatProvider.KEY_DIRECTION, if (isOut) Direction.OUT else Direction.IN)
+        bundle.putString(UniChatProvider.KEY_TYPE, msgType)
+        bundle.putString(UniChatProvider.KEY_CONTENT, text.ifBlank { "[$msgType]" })
+        XposedBridge.log("[UniChat] 上报抖音消息: peer=$convId type=$msgType dir=${if (isOut) "OUT" else "IN"} content=${text.take(30)}")
+
+        // 文件通道:同时写入抖音私有目录,供 UniChat root 读取(绕过 HyperOS 跨进程 Provider 限制)
+        writeDouyinInbox(bundle)
+        sendToApp(bundle, UniChatProvider.METHOD_INGEST_MESSAGE)
+    }
+
+    /** 抖音消息写入本地 inbox 文件(UniChat 周期同步用 root 读取) */
+    private fun writeDouyinInbox(bundle: Bundle) {
+        try {
+            val ctx = appContext ?: return
+            val file = File(ctx.filesDir, "unichat_inbox.json")
+            val line = JSONObject().apply {
+                put("peer", bundle.getString(UniChatProvider.KEY_PEER_ID))
+                put("msg_id", bundle.getString(UniChatProvider.KEY_PLATFORM_MSG_ID))
+                put("direction", bundle.getString(UniChatProvider.KEY_DIRECTION))
+                put("type", bundle.getString(UniChatProvider.KEY_TYPE))
+                put("content", bundle.getString(UniChatProvider.KEY_CONTENT))
+                put("timestamp", bundle.getLong(UniChatProvider.KEY_TIMESTAMP))
+            }.toString() + "\n"
+            file.parentFile?.mkdirs()
+            file.appendText(line)
+            XposedBridge.log("[UniChat] 抖音消息已写入 inbox: ${file.absolutePath}")
+        } catch (t: Throwable) {
+            // 写失败不影响上报
+        }
+    }
+
+    /** 抖音消息 content 是 JSON,取 text 字段 */
+    private fun extractDouyinText(raw: String): String {
+        if (raw.isBlank()) return ""
+        return try {
+            JSONObject(raw).optString("text")
+        } catch (t: Throwable) {
+            ""
+        }
+    }
+
+    /** 抖音消息 type 映射 */
+    private fun mapDyType(typeRaw: String?): String {
+        val n = typeRaw?.toIntOrNull() ?: return MsgType.TEXT
+        return when (n) {
+            1 -> MsgType.TEXT
+            2 -> MsgType.IMAGE
+            3 -> MsgType.VOICE
+            4 -> MsgType.VIDEO
+            5 -> MsgType.LINK
+            else -> MsgType.TEXT
+        }
     }
 
     // ==================== 联系人 ====================
@@ -612,10 +707,34 @@ object SqliteHook {
                 XposedBridge.log("[UniChat] 上报成功: $method ok=${ret.getBoolean("ok")}")
             } else {
                 XposedBridge.log("[UniChat] 上报被拒(返回 null): $method")
+                scheduleRetry(bundle, method, 0)
             }
         } catch (t: Throwable) {
             XposedBridge.log("[UniChat] 上报失败: $method -> ${t}")
+            // HyperOS 冻结 UniChat 时 Provider 不可达,延迟重试等解冻后补上报
+            scheduleRetry(bundle, method, 0)
         }
+    }
+
+    /** 上报失败后延迟重试(最多 6 次,间隔 3 秒),覆盖 UniChat 被冻结/未启动场景 */
+    private fun scheduleRetry(bundle: Bundle, method: String, attempt: Int) {
+        if (attempt >= 6) {
+            XposedBridge.log("[UniChat] 上报重试放弃: $method")
+            return
+        }
+        retryExecutor.schedule({
+            try {
+                val ctx = appContext ?: return@schedule
+                val ret = ctx.contentResolver.call(UniChatProvider.CONTENT_URI, method, null, bundle)
+                if (ret != null) {
+                    XposedBridge.log("[UniChat] 上报成功(重试$attempt): $method ok=${ret.getBoolean("ok")}")
+                } else {
+                    scheduleRetry(bundle, method, attempt + 1)
+                }
+            } catch (t: Throwable) {
+                scheduleRetry(bundle, method, attempt + 1)
+            }
+        }, 3, TimeUnit.SECONDS)
     }
 
     /** 实际发送(供 attach 补发复用) */

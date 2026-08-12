@@ -85,12 +85,43 @@ class DbSyncManager(private val appContext: Context) {
             Log.w(TAG, "sync wechat failed", t)
         }
         try {
-            r.douyinNew = syncDouyin(db)
+            r.douyinNew = syncDouyin(db) + syncDouyinInbox(db)
         } catch (t: Throwable) {
             r.douyinError = t.message ?: t.javaClass.simpleName
             Log.w(TAG, "sync douyin failed", t)
         }
         r
+    }
+
+    /** 读取抖音 Hook 写入的 inbox 文件(HyperOS 拦截跨进程 Provider,走文件通道兜底) */
+    private suspend fun syncDouyinInbox(db: AppDatabase): Int {
+        val inboxPath = "/data/data/com.ss.android.ugc.aweme/files/unichat_inbox.json"
+        val out = runSu("cat $inboxPath") ?: return 0
+        if (out.isBlank()) return 0
+        var inserted = 0
+        out.lineSequence().filter { it.isNotBlank() }.forEach { line ->
+            try {
+                val jo = JSONObject(line)
+                val peer = jo.optString("peer")
+                val msgId = jo.optString("msg_id")
+                if (peer.isBlank() || msgId.isBlank()) return@forEach
+                val m = Message(
+                    platform = Platform.DOUYIN,
+                    platformMsgId = msgId,
+                    direction = jo.optString("direction", Direction.IN),
+                    type = jo.optString("type", MsgType.TEXT),
+                    content = jo.optString("content"),
+                    timestamp = jo.optLong("timestamp")
+                )
+                if (IngestHelper.ingestMessage(db, m, peer, peer)) inserted++
+            } catch (t: Throwable) {
+                // 单条解析失败跳过
+            }
+        }
+        // 处理完删除,避免重复(即使有失败的也会在下轮从新消息补)
+        runSu("rm -f $inboxPath")
+        if (inserted > 0) Log.i(TAG, "抖音 inbox 文件通道: 新入库 $inserted 条")
+        return inserted
     }
 
     // ==================== root 工具 ====================

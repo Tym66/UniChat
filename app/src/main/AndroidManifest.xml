@@ -8,6 +8,9 @@
 
     <!-- 通知:新消息提醒 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 前台服务:后台保活,避免被 HyperOS 冻结导致跨进程上报失败 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:name=".UniChatApp"
@@ -34,6 +37,12 @@
             android:authorities="com.unichat.app.data"
             android:exported="true"
             android:multiprocess="true" />
+
+        <!-- 后台保活前台服务 -->
+        <service
+            android:name=".sync.KeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- LSPosed 模块声明 -->
         <meta-data
