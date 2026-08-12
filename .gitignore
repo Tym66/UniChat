@@ -57,3 +57,4 @@ build_err.txt
 .ui*.png
 .uf*.xml
 
+.research/
