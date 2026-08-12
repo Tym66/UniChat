@@ -27,6 +27,22 @@ class DbSyncManager(private val appContext: Context) {
         private const val PREFS = "sync_cursor"
         private const val KEY_WECHAT_LAST = "wechat_last_msgid"
         private const val KEY_WECHAT_WAL_MT = "wechat_copied_wal_mt"
+        /** 单次同步最多导入条数(首次全量很大,分批避免卡死) */
+        private const val BATCH_LIMIT = 3000
+
+        /** 微信内置账号的友好名称 */
+        private val KNOWN_ACCOUNTS = mapOf(
+            "filehelper" to "文件传输助手",
+            "floatbottle" to "漂流瓶",
+            "qqmail" to "QQ邮箱提醒",
+            "tmessage" to "订阅号消息",
+            "notification_messages" to "服务通知",
+            "medianote" to "语音记事本",
+            "newsapp" to "腾讯新闻",
+            "weibo" to "腾讯微博",
+            "shakeapp" to "摇一摇",
+            "qqfriend" to "QQ好友"
+        )
     }
 
     private val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -129,12 +145,10 @@ class DbSyncManager(private val appContext: Context) {
         var inserted = 0
         var maxMsgId = lastMsgId
         // 用读写模式打开副本:WAL 需要写目录创建 shm(副本是应用自己的,可安全读写)
-        // ?????????:WAL ??????? shm(????????,?????)
-        // ????(???)???,???????????????
         val (msgRows, names) = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE).use { sql ->
             val list = mutableListOf<MsgRow>()
             sql.rawQuery(
-                "SELECT msgId, type, isSend, createTime, talker, content FROM message WHERE msgId > ? ORDER BY msgId ASC",
+                "SELECT msgId, type, isSend, createTime, talker, content FROM message WHERE msgId > ? ORDER BY msgId ASC LIMIT $BATCH_LIMIT",
                 arrayOf(lastMsgId.toString())
             ).use { c ->
                 while (c.moveToNext()) {
@@ -162,7 +176,8 @@ class DbSyncManager(private val appContext: Context) {
                 content = content,
                 timestamp = if (r.createTime < 1_000_000_000_000L) r.createTime * 1000 else r.createTime
             )
-            if (IngestHelper.ingestMessage(db, m, r.talker, names[r.talker] ?: r.talker)) {
+            val displayName = names[r.talker] ?: KNOWN_ACCOUNTS[r.talker] ?: r.talker
+            if (IngestHelper.ingestMessage(db, m, r.talker, displayName)) {
                 inserted++
             }
         }
