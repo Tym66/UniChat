@@ -3,6 +3,7 @@ package com.unichat.app.sync
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
+import org.json.JSONObject
 import com.unichat.app.data.AppDatabase
 import com.unichat.app.data.Direction
 import com.unichat.app.data.IngestHelper
@@ -27,6 +28,7 @@ class DbSyncManager(private val appContext: Context) {
         private const val PREFS = "sync_cursor"
         private const val KEY_WECHAT_LAST = "wechat_last_msgid"
         private const val KEY_WECHAT_WAL_MT = "wechat_copied_wal_mt"
+        private const val KEY_DOUYIN_LAST = "douyin_last_msgid"
         /** 单次同步最多导入条数(首次全量很大,分批避免卡死) */
         private const val BATCH_LIMIT = 3000
 
@@ -124,10 +126,20 @@ class DbSyncManager(private val appContext: Context) {
     private fun findDouyinDb(): String? {
         // 抖音未加密的 IM 库(encrypted_*_im.db 是加密的,读不了)
         val out = runSu("find /data/data/com.ss.android.ugc.aweme/databases -maxdepth 1 -name im_database_*") ?: return null
-        val list = out.lineSequence().map { it.trim() }.filter { it.contains("/im_database_") }.toList()
+        val list = out.lineSequence().map { it.trim() }
+            .filter { it.contains("/im_database_") }
+            // 排除 -shm/-wal 后缀与无 uid 的空模板库
+            .filter { !it.endsWith("-shm") && !it.endsWith("-wal") && !it.endsWith("/im_database_") }
+            .toList()
         if (list.isEmpty()) return null
-        // 优先不带 uid 后缀的(可能为当前活跃),否则取最后一个
-        return list.firstOrNull { it.endsWith("/im_database_") } ?: list.last()
+        // 多账号时选 mtime 最新的(当前活跃账号)
+        var best = list.first()
+        var bestMt = -1L
+        for (c in list) {
+            val mt = runSu("stat -c %Y $c")?.trim()?.toLongOrNull() ?: 0L
+            if (mt > bestMt) { bestMt = mt; best = c }
+        }
+        return best
     }
 
     private suspend fun syncDouyin(db: AppDatabase): Int {
@@ -137,8 +149,10 @@ class DbSyncManager(private val appContext: Context) {
         val cache = cacheDir.absolutePath
         // 抖音库较小,每次全量拷贝(先 root 清旧文件)
         runSu("rm -f $cache/im.db $cache/im.db-wal $cache/im.db-shm")
+        // 主库 + wal(最新消息在 wal 里),分别重命名为 im.db / im.db-wal
         runSu("cp -f $src $cache/im.db")
-        runSu("chmod 666 $cache/im.db")
+        runSu("cp -f $src-wal $cache/im.db-wal")
+        runSu("chmod 666 $cache/im.db $cache/im.db-wal")
         if (!dbFile.exists() || dbFile.length() < 1000L) {
             throw IllegalStateException("抖音库复制失败")
         }
@@ -147,31 +161,85 @@ class DbSyncManager(private val appContext: Context) {
 
     private suspend fun parseDouyin(db: AppDatabase, dbFile: File): Int {
         var inserted = 0
+        val lastMsgId = prefs.getLong(KEY_DOUYIN_LAST, 0L)
         SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { sql ->
-            // 探测:列出所有表
-            val tables = mutableListOf<String>()
-            sql.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null).use { c ->
-                while (c.moveToNext()) tables.add(c.getString(0))
+            // 会话名 + 当前账号 uid(group_owner_id 即本机账号)
+            val convNames = HashMap<String, String>()
+            var selfId: String? = null
+            sql.rawQuery("SELECT conversation_id, name, group_owner_id FROM im_conversation", null).use { c ->
+                while (c.moveToNext()) {
+                    val cid = c.getString(0)
+                    val name = c.getString(1)
+                    if (!name.isNullOrBlank()) convNames[cid] = name
+                    if (selfId == null) selfId = c.getString(2)
+                }
             }
-            Log.i(TAG, "抖音库表: $tables")
-            val msgTable = tables.firstOrNull {
-                it == "im_msg" || it == "message" || it == "msg" ||
-                    it == "conversation_message" || it == "chat_message" ||
-                    it.endsWith("_msg") || it.contains("message") || it.contains("_msg")
+
+            // 增量读新消息(message_id 数字递增)
+            val rows = mutableListOf<DyRow>()
+            var maxMsgId = lastMsgId
+            sql.rawQuery(
+                "SELECT message_id, conversation_id, sender_id, content_type, create_time, content, brief " +
+                    "FROM im_message WHERE message_id > ? ORDER BY message_id ASC LIMIT 2000",
+                arrayOf(lastMsgId.toString())
+            ).use { c ->
+                while (c.moveToNext()) {
+                    val mid = c.getLong(0)
+                    val conv = c.getString(1) ?: ""
+                    val sender = c.getString(2) ?: ""
+                    val ctype = c.getInt(3)
+                    val ct = c.getLong(4)
+                    val content = c.getString(5) ?: ""
+                    val brief = c.getString(6) ?: ""
+                    if (conv.isBlank()) continue
+                    rows.add(DyRow(mid, conv, sender, ctype, ct, content, brief))
+                    if (mid > maxMsgId) maxMsgId = mid
+                }
             }
-            if (msgTable == null) {
-                Log.w(TAG, "抖音库未找到消息表")
-                return 0
+
+            for (r in rows) {
+                val msgType = mapDyType(r.contentType)
+                val text = extractDyText(r.content, r.brief, msgType)
+                val m = Message(
+                    platform = Platform.DOUYIN,
+                    platformMsgId = r.mid.toString(),
+                    direction = if (r.sender == selfId) Direction.OUT else Direction.IN,
+                    type = msgType,
+                    content = text,
+                    timestamp = if (r.createTime < 1_000_000_000_000L) r.createTime * 1000 else r.createTime
+                )
+                if (IngestHelper.ingestMessage(db, m, r.conv, convNames[r.conv] ?: r.conv)) {
+                    inserted++
+                }
             }
-            val cols = sql.rawQuery("PRAGMA table_info($msgTable)", null).use { c ->
-                val list = mutableListOf<String>()
-                while (c.moveToNext()) list.add(c.getString(1))
-                list
-            }
-            Log.i(TAG, "抖音消息表 $msgTable 字段: $cols")
-            // TODO: 待确认字段后实现精确解析
+            prefs.edit().putLong(KEY_DOUYIN_LAST, maxMsgId).apply()
         }
+        Log.i(TAG, "抖音增量同步完成: 新入库 $inserted 条")
         return inserted
+    }
+
+    /** 抖音 content_type -> 统一类型 */
+    private fun mapDyType(contentType: Int): String = when (contentType) {
+        1 -> MsgType.TEXT
+        2 -> MsgType.IMAGE
+        3 -> MsgType.VOICE
+        4 -> MsgType.VIDEO
+        5 -> MsgType.LINK
+        else -> MsgType.TEXT
+    }
+
+    /** 抖音消息 content 是 JSON {"text":"..."},取 text;媒体消息给占位 */
+    private fun extractDyText(content: String, brief: String, type: String): String {
+        if (content.isNotBlank()) {
+            try {
+                val text = JSONObject(content).optString("text")
+                if (text.isNotBlank()) return text
+            } catch (t: Throwable) {
+                // 忽略,走 brief
+            }
+        }
+        if (brief.isNotBlank()) return brief
+        return "[$type]"
     }
 
     private suspend fun syncWechat(db: AppDatabase): Int {
@@ -298,5 +366,15 @@ class DbSyncManager(private val appContext: Context) {
         val createTime: Long,
         val talker: String,
         val content: String
+    )
+
+    private data class DyRow(
+        val mid: Long,
+        val conv: String,
+        val sender: String,
+        val contentType: Int,
+        val createTime: Long,
+        val content: String,
+        val brief: String
     )
 }
