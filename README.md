@@ -1,112 +1,94 @@
 # UniChat
 
-> 聚合微信/抖音聊天 + 模块搜索 的 LSPosed 模块工具
+> 聚合微信/抖音聊天 + 模块搜索 的 LSPosed 模块工具(Android)
 
-一个集 **跨平台聊天聚合** 与 **模块仓库搜索** 于一体的 Android 工具,基于 LSPosed 框架,需要 root 权限。
+基于 LSPosed 框架,需要 **root 权限**。当前版本为开发迭代中的 v0.2.0,以真机验证为准。
+
+## ✅ 当前真实功能状态
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| **抖音聊天同步** | ✅ **可用** | 私信(Bot 会话)通过 root 读库;真实好友私信通过 Hook + 文件通道同步 |
+| **微信聊天同步** | ⚠️ **受限** | 微信 8.0.x 消息走 native(WCDB C++)写库,Java Hook 拦不到;库又 SQLCipher 加密读不了。实时抓取需 native Hook,未实现 |
+| **模块搜索** | ✅ 可用 | GitHub 仓库搜索(Magisk / LSPosed) |
+| **新拟态 UI** | ✅ | HyperOS 风格(浮雕卡片/凹陷搜索/无涟漪触觉点击/前台服务保活) |
 
 ## ✨ 功能
 
-### 💬 聊天聚合
-- 将**微信**与**抖音**中与同一个人的聊天聚合到统一会话
-- 按联系人(姓名/手机号/平台 ID)自动归并,一个人一个会话
-- 跨平台**已读同步**:在一个平台读了,另一个平台也标记已读
-- 消息按时间线统一展示,来源平台有角标
-- 联系人资料(备注、头像)聚合整理
-- **直接读库同步(推荐)**:点聊天页右上角"同步"按钮,用 root 直接读取微信本地数据库
-  增量导入聊天记录——即使 Hook 拦截不到新版微信的 native 写库,也能完整同步历史消息
+### 💬 抖音聊天同步(核心功能)
+- **私信同步**:Bot 会话(root 读未加密 im_database)+ 真实好友私信(Hook 捕获 msg 表 → 文件通道)
+- 消息方向(发出/收到)、内容(JSON 提取)、时间、联系人归并
+- 联系人头像同步(icon_image → 网络头像)
+- **周期自动同步**:前台每 45 秒自动拉新,无需手动
+- **前台服务保活**:退到后台不被 HyperOS 冻结,跨进程/文件通道持续工作
 
 ### 🔍 模块搜索
-- 聚合 **Magisk 模块** 与 **LSPosed/Xposed 模块** 仓库(GitHub)
-- 关键词搜索 + 分类浏览
-- 按 Star 数排序,一键跳转仓库
+- Magisk / LSPosed 模块仓库搜索、分类、Star 排序、跳转仓库
 
 ### ℹ️ 关于页
-- 开发者信息、GitHub 链接、设备系统信息一览
+- 开发者、GitHub、设备信息、打赏
 
 ## 🧩 技术原理
 
-### Hook 层(核心功能1)
-不依赖微信/抖音内部类名,直接 Hook 数据库写入层。微信实际使用自家 **WCDB** 写库,因此同时拦截三条路径:
-
-- `com.tencent.wcdb.database.SQLiteDatabase`(微信 WCDB 真实写库路径)
-- `android.database.sqlite.SQLiteDatabase`(系统框架,抖音等)
-- `SQLiteStatement` 编译语句(框架 + WCDB,兜底)
-
+### 抖音:三层数据链路(真机验证)
 ```
-微信/抖音进程
-   │  (LSPosed 注入)
-   ▼
-SQLiteDatabase(WCDB/框架).insert* / update* / execSQL
-   │  识别消息表/联系人表,字段语义映射
-   ▼
-ContentResolver.call → UniChatProvider(跨进程)
-   │  联系人归并(手机号跨平台) / 消息去重 / 已读同步 / 同步统计
-   ▼
-Room 数据库 → Compose UI 实时刷新
+抖音进程(LSPosed 注入)
+  ├─ Hook 框架 SQLiteDatabase/SQLiteStatement(捕获 msg 表明文消息)
+  │     └─ ① 文件通道:写入抖音私有目录 inbox(绕过 HyperOS 跨进程拦截)
+  │        └─ UniChat 周期用 root 读取 → 入库
+  │     └─ ② 跨进程 ContentResolver → UniChatProvider(在 HyperOS 放行时可用)
+  └─ root 读未加密 im_database(Bot 会话 + 联系人资料)
+        └─ 增量解析 → 入库
 ```
 
-覆盖的能力:
-- **消息聚合**:微信/抖音新消息实时写入统一会话
-- **跨平台归并**:同一人微信+抖音的资料按手机号自动归并,一人一会话
-- **已读同步**:一个平台读了,另一个平台同步标记已读
-- **同步诊断**:聊天页顶部显示微信/抖音接入状态与最近同步条数
-
-这样的好处:微信/抖音升级也不容易失效,因为 WCDB 表结构与字段名长期稳定。
-
-### 直接读库同步(核心功能1 增强)
-新版微信聊天记录可能走 native 写库,Java 层 Hook 拦不到。因此 UniChat 提供**读库兜底**:
-
-```
-UniChat(需要 root)
-   │  su -c cp 微信 EnMicroMsg.db(+wal) → 应用缓存
-   ▼
-Android SQLite 只读增量解析 message/rcontact 表(msgId > 上次位置)
-   │  复用同一套联系人归并/去重逻辑
-   ▼
-Room 数据库 → Compose UI 实时刷新
-```
-
-- 聊天页点"同步"按钮或进入 App 自动同步一次
-- 增量同步,只拉取新增消息,不重复入库
-- 依赖 root(su),建议同时在 MIUI/HyperOS 里给 UniChat 开启**自启动 + 电池无限制 + 后台锁定**
+### 微信:现状与瓶颈
+- 微信 8.0.x 消息写入 **native(WCDB C++)层**,Java 的 `SQLiteDatabase`/`SQLiteStatement`(含
+  `com.tencent.wcdb.compat` 兼容层)都拦不到
+- `EnMicroMsg.db` 为 **SQLCipher 加密**,root 直接读不可行
+- 可行方向(未实施):native Hook(参考 WeKit 的 zygisk ArtHook 方案),数天级、版本敏感
 
 ### UI 层
-- Jetpack Compose + Material 3
-- HyperOS 风格:纯白背景、大标题居中、圆角卡片、无分割线、底部悬浮操作栏
+- Jetpack Compose + Material 3 + **自研新拟态设计系统**
+  (`ui/designsystem`:浮雕阴影引擎 / 无涟漪缩放点击 / 触觉反馈 / HyperOS 色板)
+- 深色/浅色自适应
 
 ## 🛠️ 构建
 
-环境要求:
-- JDK 17+
-- Android SDK 34
+环境:JDK 17+ / Android SDK 34
 
 ```bash
 ./gradlew assembleDebug
 # 产物:app/build/outputs/apk/debug/app-debug.apk
 ```
 
+> 本机内存紧张时可用:`./gradlew assembleDebug --no-daemon -Dorg.gradle.jvmargs="-Xmx640m -XX:MaxMetaspaceSize=160m"`
+
 ## 📦 使用
 
-1. 安装 APK(本应用同时是 LSPosed 模块)
-2. LSPosed 中启用模块,勾选作用域:**微信** 和 **抖音**
+1. 安装 APK(同时是 LSPosed 模块)
+2. LSPosed 启用模块,作用域勾选 **微信 + 抖音**
 3. 重启微信/抖音
-4. 打开 UniChat,开始使用
+4. 打开 UniChat(前台服务自动启动,保持进程存活)
 
-## 🗺️ Roadmap
+**建议(提升稳定性)**:
+- 给 UniChat 开启 **自启动 + 电池无限制 + 后台锁定**(HyperOS 后台限制的根治方式)
+- 允许通知(前台保活需要)
 
-- [x] 项目骨架 + 双核心功能框架
-- [ ] 微信/抖音消息表字段适配(需真机调试)
+## 🗺️ 待办(Roadmap)
+
+- [x] 抖音私信同步(读库 + Hook + 文件通道)
+- [x] 新拟态 UI / 周期同步 / 前台服务保活
+- [ ] 微信 native Hook(实时消息,攻坚项)
+- [ ] 抖音真实联系人昵称(当前显示对端 ID,需接抖音用户接口)
 - [ ] 图片/语音/视频消息预览
-- [ ] 已读回执细化(对方已读)
-- [ ] 更多模块仓库接入(官方仓库、酷安等)
+- [ ] 已读回执细化
 - [ ] 模块一键下载/更新
-- [ ] 联系人资料页(跨平台档案)
 
 ## ⚠️ 声明
 
-- 本工具仅用于个人学习与研究,请勿用于任何违法违规用途
-- 微信、抖音均为其各自公司的商标,本工具与其无任何关联
-- 使用 Hook 类工具存在账号风控风险,请自行评估
+- 仅供个人学习与研究,请勿用于违法违规用途
+- 微信、抖音为其各自公司商标,本工具与其无任何关联
+- Hook 类工具有账号风控风险,请自行评估
 
 ## 📄 License
 
