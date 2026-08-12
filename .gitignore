@@ -39,3 +39,11 @@ wx.db
 build_err.txt
 build_tail.txt
 *.apk
+
+# 调试临时文件
+.designskills/
+.hdr.bin
+.ksu/.phone_db/.wxdb/.dytmp/.lspd_tmp/
+build_tail.txt
+build_err.txt.logcap*
+
