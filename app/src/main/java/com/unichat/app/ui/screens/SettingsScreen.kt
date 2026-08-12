@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unichat.app.ui.ThemeMode
+import com.unichat.app.ui.designsystem.theme.neumorphicConcave
 
 /** 设置页:主题选择(跟随系统 / 日间 / 夜间),颜色跟随主题 */
 @Composable
@@ -93,8 +94,7 @@ fun SettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .neumorphicConcave(cornerRadius = 20.dp, elevation = 3.dp)
                     .padding(vertical = 6.dp)
             ) {
                 ThemeOption(

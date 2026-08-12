@@ -44,6 +44,7 @@ import coil.compose.AsyncImage
 import com.unichat.app.BuildConfig
 import com.unichat.app.R
 import com.unichat.app.ui.components.CircleIconButton
+import com.unichat.app.ui.designsystem.theme.neumorphic3D
 
 /**
  * 《关于》页面
@@ -251,8 +252,7 @@ private fun InfoCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .neumorphic3D(cornerRadius = 20.dp, elevation = 5.dp)
             .padding(horizontal = 18.dp, vertical = 14.dp)
     ) {
         Text(

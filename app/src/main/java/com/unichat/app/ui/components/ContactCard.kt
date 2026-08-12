@@ -27,8 +27,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unichat.app.data.Contact
 import com.unichat.app.data.Platform
+import com.unichat.app.ui.designsystem.theme.neumorphic3D
+import com.unichat.app.ui.designsystem.token.neumorphicTap
 
-/** 聊天列表联系人卡片:头像 + 名称 + 平台角标 + 未读红点(跟随主题) */
+/** HyperOS 新拟态联系人卡片:浮雕凸起 + 无涟漪触觉点击 + 头像/角标/未读 */
 @Composable
 fun ContactCard(
     contact: Contact,
@@ -38,13 +40,8 @@ fun ContactCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(
-                onClick = onClick,
-                indication = null,
-                interactionSource = MutableInteractionSource()
-            )
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
+            .neumorphic3D(cornerRadius = 20.dp, elevation = 5.dp)
+            .neumorphicTap(scalePressed = 0.97f, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

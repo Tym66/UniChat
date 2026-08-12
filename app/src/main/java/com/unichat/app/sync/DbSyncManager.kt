@@ -75,13 +75,18 @@ class DbSyncManager(private val appContext: Context) {
             return@withContext r
         }
         try {
-            r.wechatNew = syncWechat(db)
+            // 微信库是 SQLCipher 加密,直接读不可行;保留 Hook 通道,这里标记说明
+            r.wechatError = "微信库已加密,请用实时 Hook 同步"
         } catch (t: Throwable) {
             r.wechatError = t.message ?: t.javaClass.simpleName
             Log.w(TAG, "sync wechat failed", t)
         }
-        // 抖音库路径差异大,先标记待适配
-        r.douyinError = "待适配"
+        try {
+            r.douyinNew = syncDouyin(db)
+        } catch (t: Throwable) {
+            r.douyinError = t.message ?: t.javaClass.simpleName
+            Log.w(TAG, "sync douyin failed", t)
+        }
         r
     }
 
@@ -89,10 +94,15 @@ class DbSyncManager(private val appContext: Context) {
 
     private fun runSu(command: String): String? {
         return try {
-            val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+            // KernelSU 的 su -c 直接执行命令(不走 shell 通配符/引号展开),
+            // 因此调用方命令需避免通配符,路径用无空格形式。
+            // -M(--mount-master): 切到全局挂载命名空间,否则 App 的 su 被隔离,
+            //   只能看到自己 category 的 data 目录(读不到微信库)。
+            val proc = Runtime.getRuntime().exec(arrayOf("su", "-M", "-c", command))
             val out = proc.inputStream.bufferedReader().readText()
             val err = proc.errorStream.bufferedReader().readText()
             proc.waitFor()
+            Log.i(TAG, "su[$command] exit=${proc.exitValue()} out=${out.trim().take(120)} err=${err.trim().take(120)}")
             (if (out.isNotBlank()) out else if (err.isNotBlank()) err else null)
         } catch (t: Throwable) {
             Log.w(TAG, "su 执行失败: $command -> $t")
@@ -103,10 +113,65 @@ class DbSyncManager(private val appContext: Context) {
     // ==================== 微信 ====================
 
     private fun findWechatDb(): String? {
-        val out = runSu("ls -d /data/data/com.tencent.mm/MicroMsg/*/EnMicroMsg.db 2>/dev/null") ?: return null
+        val out = runSu("find /data/data/com.tencent.mm/MicroMsg -maxdepth 2 -name EnMicroMsg.db") ?: return null
         return out.lineSequence()
             .map { it.trim() }
             .firstOrNull { it.endsWith("/EnMicroMsg.db") }
+    }
+
+    // ==================== 抖音 ====================
+
+    private fun findDouyinDb(): String? {
+        // 抖音未加密的 IM 库(encrypted_*_im.db 是加密的,读不了)
+        val out = runSu("find /data/data/com.ss.android.ugc.aweme/databases -maxdepth 1 -name im_database_*") ?: return null
+        val list = out.lineSequence().map { it.trim() }.filter { it.contains("/im_database_") }.toList()
+        if (list.isEmpty()) return null
+        // 优先不带 uid 后缀的(可能为当前活跃),否则取最后一个
+        return list.firstOrNull { it.endsWith("/im_database_") } ?: list.last()
+    }
+
+    private suspend fun syncDouyin(db: AppDatabase): Int {
+        val src = findDouyinDb() ?: throw IllegalStateException("未找到抖音聊天库 im_database")
+        val cacheDir = File(appContext.cacheDir, "dy").apply { mkdirs() }
+        val dbFile = File(cacheDir, "im.db")
+        val cache = cacheDir.absolutePath
+        // 抖音库较小,每次全量拷贝(先 root 清旧文件)
+        runSu("rm -f $cache/im.db $cache/im.db-wal $cache/im.db-shm")
+        runSu("cp -f $src $cache/im.db")
+        runSu("chmod 666 $cache/im.db")
+        if (!dbFile.exists() || dbFile.length() < 1000L) {
+            throw IllegalStateException("抖音库复制失败")
+        }
+        return parseDouyin(db, dbFile)
+    }
+
+    private suspend fun parseDouyin(db: AppDatabase, dbFile: File): Int {
+        var inserted = 0
+        SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { sql ->
+            // 探测:列出所有表
+            val tables = mutableListOf<String>()
+            sql.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null).use { c ->
+                while (c.moveToNext()) tables.add(c.getString(0))
+            }
+            Log.i(TAG, "抖音库表: $tables")
+            val msgTable = tables.firstOrNull {
+                it == "im_msg" || it == "message" || it == "msg" ||
+                    it == "conversation_message" || it == "chat_message" ||
+                    it.endsWith("_msg") || it.contains("message") || it.contains("_msg")
+            }
+            if (msgTable == null) {
+                Log.w(TAG, "抖音库未找到消息表")
+                return 0
+            }
+            val cols = sql.rawQuery("PRAGMA table_info($msgTable)", null).use { c ->
+                val list = mutableListOf<String>()
+                while (c.moveToNext()) list.add(c.getString(1))
+                list
+            }
+            Log.i(TAG, "抖音消息表 $msgTable 字段: $cols")
+            // TODO: 待确认字段后实现精确解析
+        }
+        return inserted
     }
 
     private suspend fun syncWechat(db: AppDatabase): Int {
@@ -116,12 +181,16 @@ class DbSyncManager(private val appContext: Context) {
         val walPath = "$srcDb-wal"
 
         // WAL mtime 未变且已有缓存 -> 跳过拷贝
-        val walMt = runSu("stat -c %Y \"$walPath\"")?.trim()?.toLongOrNull() ?: 0L
+        val walMt = runSu("stat -c %Y $walPath")?.trim()?.toLongOrNull() ?: 0L
         val copiedMt = prefs.getLong(KEY_WECHAT_WAL_MT, 0L)
         if (!dbFile.exists() || walMt > copiedMt) {
-            cacheDir.listFiles()?.forEach { it.delete() }
-            // 只拷 db + wal(不拷 shm,由本地 SQLite 重建,避免锁状态不一致)
-            runSu("cp -f \"$srcDb\" \"$walPath\" '${cacheDir.absolutePath}/' 2>/dev/null")
+            val cache = cacheDir.absolutePath
+            // root 删除旧副本(root 拷入的文件 App 删不掉)
+            runSu("rm -f $cache/EnMicroMsg.db $cache/EnMicroMsg.db-wal $cache/EnMicroMsg.db-shm")
+            // 拷主库 + wal(微信库是 WAL 模式,缺 wal 无法打开;shm 由本地重建)
+            runSu("cp -f $srcDb $walPath $cache/")
+            // 赋读写权限:App 打开时需写(重建 shm),且文件在 App 私有缓存里无风险
+            runSu("chmod 666 $cache/EnMicroMsg.db $cache/EnMicroMsg.db-wal")
             prefs.edit().putLong(KEY_WECHAT_WAL_MT, walMt).apply()
         }
         if (!dbFile.exists() || dbFile.length() < 1000L) {
@@ -131,20 +200,13 @@ class DbSyncManager(private val appContext: Context) {
     }
 
     private suspend fun parseWechatMessages(db: AppDatabase, dbFile: File, lastMsgId: Long): Int {
-        return try {
-            doParse(db, dbFile, lastMsgId)
-        } catch (t: Throwable) {
-            // 可能是 wal 与主库拷贝瞬间不一致 -> 删 wal 后重试
-            val wal = File(dbFile.absolutePath + "-wal")
-            if (wal.exists()) wal.delete()
-            doParse(db, dbFile, lastMsgId)
-        }
+        return doParse(db, dbFile, lastMsgId)
     }
 
     private suspend fun doParse(db: AppDatabase, dbFile: File, lastMsgId: Long): Int {
         var inserted = 0
         var maxMsgId = lastMsgId
-        // 用读写模式打开副本:WAL 需要写目录创建 shm(副本是应用自己的,可安全读写)
+        // 读写打开副本(WAL 模式需要写目录创建 shm;副本 666 在 App 私有缓存内)
         val (msgRows, names) = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE).use { sql ->
             val list = mutableListOf<MsgRow>()
             sql.rawQuery(

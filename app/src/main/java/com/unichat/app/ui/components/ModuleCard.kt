@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unichat.app.data.ModuleCategory
 import com.unichat.app.data.ModuleInfo
+import com.unichat.app.ui.designsystem.theme.neumorphic3D
+import com.unichat.app.ui.designsystem.token.neumorphicTap
 
 /**
  * 模块列表卡片:
@@ -44,13 +46,8 @@ fun ModuleCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(
-                onClick = onClick,
-                indication = null,
-                interactionSource = MutableInteractionSource()
-            )
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
+            .neumorphic3D(cornerRadius = 20.dp, elevation = 5.dp)
+            .neumorphicTap(scalePressed = 0.97f, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

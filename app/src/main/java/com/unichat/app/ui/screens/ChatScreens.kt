@@ -47,6 +47,8 @@ import com.unichat.app.data.SyncStat
 import com.unichat.app.ui.components.ContactCard
 import com.unichat.app.ui.components.SectionTitle
 import com.unichat.app.ui.components.UniSearchBar
+import com.unichat.app.ui.designsystem.theme.LocalHyperColors
+import com.unichat.app.ui.designsystem.theme.neumorphicConvex
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -276,8 +278,9 @@ fun ChatDetailScreen(
 private fun MessageBubble(msg: Message) {
     val isOut = msg.direction == Direction.OUT
     val platformTag = if (msg.platform == Platform.WECHAT) "微信" else "抖音"
-    val bubbleColor = if (isOut) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val textColor = if (isOut) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val colors = LocalHyperColors.current
+    val bubbleColor = if (isOut) colors.primary else colors.cardBackground
+    val textColor = if (isOut) Color.White else colors.textPrimary
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isOut) Arrangement.End else Arrangement.Start
@@ -291,13 +294,11 @@ private fun MessageBubble(msg: Message) {
             )
             Box(
                 modifier = Modifier
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = 14.dp, topEnd = 14.dp,
-                            bottomStart = if (isOut) 14.dp else 4.dp,
-                            bottomEnd = if (isOut) 4.dp else 14.dp
-                        )
+                    .then(
+                        if (isOut) Modifier
+                        else Modifier.neumorphicConvex(cornerRadius = 14.dp, elevation = 3.dp)
                     )
+                    .clip(RoundedCornerShape(14.dp))
                     .background(bubbleColor)
                     .padding(horizontal = 14.dp, vertical = 9.dp)
             ) {

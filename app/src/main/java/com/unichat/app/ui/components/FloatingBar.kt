@@ -32,9 +32,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unichat.app.ui.theme.OverlayFill
+import com.unichat.app.ui.designsystem.theme.LocalHyperColors
+import com.unichat.app.ui.designsystem.theme.neumorphicConvex
+import com.unichat.app.ui.designsystem.token.neumorphicTap
 
 /**
- * HyperOS 风格底部悬浮 Dock:半透明圆角胶囊 + 图标 + 文字标签 + 选中高亮
+ * HyperOS 新拟态底部 Dock:凸起胶囊 + 图标 + 文字 + 无涟漪触觉点击 + 选中高亮
  * @param selected 当前选中项:0=聊天 1=模块 2=关于
  */
 @Composable
@@ -45,18 +48,13 @@ fun FloatingActionBar(
     onAboutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bg = if (MaterialTheme.colorScheme.background == Color.White) {
-        OverlayFill // 浅色:半透明白(毛玻璃感)
-    } else {
-        Color(0xE61E1E1E) // 深色:半透明深灰
-    }
-    val primary = MaterialTheme.colorScheme.primary
+    val colors = LocalHyperColors.current
+    val primary = colors.primary
     Row(
         modifier = modifier
             .fillMaxWidth()
             .height(64.dp)
-            .clip(RoundedCornerShape(32.dp))
-            .background(bg)
+            .neumorphicConvex(cornerRadius = 32.dp, elevation = 8.dp)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
@@ -94,16 +92,11 @@ private fun NavItem(
     primary: Color,
     onClick: () -> Unit
 ) {
-    val tint = if (selected) primary else MaterialTheme.colorScheme.onSurfaceVariant
+    val colors = LocalHyperColors.current
+    val tint = if (selected) primary else colors.textSecondary
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (selected) primary.copy(alpha = 0.14f) else Color.Transparent)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
+            .neumorphicTap(scalePressed = 0.92f, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

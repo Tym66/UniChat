@@ -23,8 +23,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.unichat.app.ui.designsystem.theme.neumorphicConcave
 
-/** 浅灰色圆角搜索框:内置放大镜图标 + 占位文字(跟随主题) */
+/** HyperOS 新拟态搜索框:凹陷槽 + 放大镜图标 + 占位文字(跟随主题) */
 @Composable
 fun UniSearchBar(
     value: String,
@@ -36,8 +37,7 @@ fun UniSearchBar(
         modifier = modifier
             .fillMaxWidth()
             .height(44.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .neumorphicConcave(cornerRadius = 22.dp, elevation = 2.dp)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

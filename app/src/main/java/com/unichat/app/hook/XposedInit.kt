@@ -61,7 +61,7 @@ class XposedInit : IXposedHookLoadPackage {
 object SqliteHook {
 
     /** 诊断模式:记录微信/抖音所有数据库写入路径(用于定位真实写库 API,上线置 false) */
-    private const val DIAG = false
+    private const val DIAG = true
 
     private val installed = ConcurrentHashMap.newKeySet<String>()
 
@@ -71,6 +71,16 @@ object SqliteHook {
 
     /** 应用上下文未就绪前暂存的上报(attach 后补发) */
     private val pendingReports = ConcurrentLinkedQueue<Pair<Bundle, String>>()
+
+    /** SQLiteStatement 绑定参数(线程局部):statement 实例 -> (index -> value) */
+    private val stmtBindings = ThreadLocal.withInitial {
+        object : LinkedHashMap<Any, HashMap<Int, Any?>>() {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Any, HashMap<Int, Any?>>): Boolean {
+                // 防止 statement 长期不 execute 导致泄漏
+                return size > 256
+            }
+        }
+    }
 
     /** 各平台:消息表名集合 */
     private val messageTables = mapOf(
@@ -254,10 +264,36 @@ object SqliteHook {
         XposedBridge.log("[UniChat] 数据库类 Hook 完成: $className")
     }
 
-    /** 拦截 SQLiteStatement 编译语句(拿不到绑定值,仅日志/兜底) */
+    /** 拦截 SQLiteStatement 编译语句:捕获 bind* 绑定参数,组装成消息上报 */
     private fun hookStatementClass(platform: String, className: String, classLoader: ClassLoader?) {
         val cl = XposedHelpers.findClass(className, classLoader)
-        val hook = object : XC_MethodHook() {
+
+        // ---------- 绑定参数捕获(参数在 native 层,必须 hook bind* 才能拿到值) ----------
+        val bindHook = object : XC_MethodHook() {
+            override fun afterHookedMethod(param: MethodHookParam) {
+                try {
+                    val stmt = param.thisObject
+                    val idx = (param.args[0] as? Int) ?: return
+                    val map = stmtBindings.get().getOrPut(stmt) { HashMap() }
+                    map[idx] = param.args.getOrNull(1)
+                } catch (t: Throwable) {
+                    // 静默
+                }
+            }
+        }
+        hookIfPresent(cl, "bindLong",
+            arrayOf<Class<*>>(Int::class.javaPrimitiveType!!, Long::class.javaPrimitiveType!!), bindHook)
+        hookIfPresent(cl, "bindDouble",
+            arrayOf<Class<*>>(Int::class.javaPrimitiveType!!, Double::class.javaPrimitiveType!!), bindHook)
+        hookIfPresent(cl, "bindString",
+            arrayOf<Class<*>>(Int::class.javaPrimitiveType!!, String::class.java), bindHook)
+        hookIfPresent(cl, "bindNull",
+            arrayOf<Class<*>>(Int::class.javaPrimitiveType!!), bindHook)
+        hookIfPresent(cl, "bindBlob",
+            arrayOf<Class<*>>(Int::class.javaPrimitiveType!!, ByteArray::class.java), bindHook)
+
+        // ---------- 执行时用绑定参数组装消息 ----------
+        val execHook = object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
                 try {
                     val sql = XposedHelpers.getObjectField(param.thisObject, "mSql") as? String ?: return
@@ -267,16 +303,19 @@ object SqliteHook {
                     if (!isTargetTableMentioned(sql, platform)) return
                     val table = parseWriteTable(sql) ?: return
                     if (table in messageTables[platform].orEmpty()) {
-                        XposedBridge.log("[UniChat] 检测到消息表语句写入(绑定值在 native 层,跳过): 表=$table")
+                        val bindings = stmtBindings.get().remove(param.thisObject) ?: HashMap()
+                        val values = contentValuesFromStmt(sql, bindings) ?: return
+                        XposedBridge.log("[UniChat] 捕获消息写入(语句绑定): 表=$table keys=${values.keySet()}")
+                        reportMessage(platform, values)
                     }
                 } catch (t: Throwable) {
                     // 静默
                 }
             }
         }
-        hookIfPresent(cl, "executeInsert", emptyArray<Class<*>>(), hook)
-        hookIfPresent(cl, "executeUpdateDelete", emptyArray<Class<*>>(), hook)
-        hookIfPresent(cl, "execute", emptyArray<Class<*>>(), hook)
+        hookIfPresent(cl, "executeInsert", emptyArray<Class<*>>(), execHook)
+        hookIfPresent(cl, "executeUpdateDelete", emptyArray<Class<*>>(), execHook)
+        hookIfPresent(cl, "execute", emptyArray<Class<*>>(), execHook)
         XposedBridge.log("[UniChat] 语句类 Hook 完成: $className")
     }
 
@@ -507,6 +546,23 @@ object SqliteHook {
                         ?: raw.toDoubleOrNull()?.let { cv.put(cols[i], it) }
                 }
             }
+        }
+        if (cv.size() == 0) return null
+        return cv
+    }
+
+    /** 从 SQLiteStatement 的 INSERT 语句 + 绑定参数构建 ContentValues */
+    private fun contentValuesFromStmt(sql: String, bindings: Map<Int, Any?>): ContentValues? {
+        val m = Regex(
+            """(?is)^\s*(?:insert|replace)\s+(?:or\s+\w+\s+)?into\s+`?(\w+)`?\s*\(([^)]*)\)\s*values\s*\([^)]*\)\s*$"""
+        ).find(sql.trim()) ?: return null
+        val cols = m.groupValues[2].split(',').map { it.trim().trim('`') }.filter { it.isNotEmpty() }
+        if (cols.isEmpty()) return null
+        val cv = ContentValues()
+        for ((idx, col) in cols.withIndex()) {
+            // bind 索引从 1 开始
+            val v = bindings[idx + 1] ?: continue
+            putValue(cv, col, v)
         }
         if (cv.size() == 0) return null
         return cv
