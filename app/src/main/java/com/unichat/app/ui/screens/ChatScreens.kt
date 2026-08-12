@@ -2,6 +2,8 @@ package com.unichat.app.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,11 +23,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +57,9 @@ fun ChatListScreen(
     contacts: List<Contact>,
     query: String,
     syncStats: List<SyncStat>,
+    syncing: Boolean,
+    syncMessage: String?,
+    onSync: () -> Unit,
     onQueryChange: (String) -> Unit,
     onContactClick: (Contact) -> Unit,
     modifier: Modifier = Modifier
@@ -75,7 +82,12 @@ fun ChatListScreen(
             )
         }
         // 平台接入状态条(诊断):显示微信/抖音是否已接入、最近同步
-        SyncStatusRow(syncStats = syncStats)
+        SyncStatusRow(
+            syncStats = syncStats,
+            syncing = syncing,
+            syncMessage = syncMessage,
+            onSync = onSync
+        )
         UniSearchBar(
             value = query,
             onValueChange = onQueryChange,
@@ -105,15 +117,52 @@ fun ChatListScreen(
 
 /** 平台接入状态条:绿点=已接入并最近同步,灰点=未检测到数据流 */
 @Composable
-private fun SyncStatusRow(syncStats: List<SyncStat>) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        SyncChip(label = "微信", stat = syncStats.firstOrNull { it.platform == Platform.WECHAT })
-        SyncChip(label = "抖音", stat = syncStats.firstOrNull { it.platform == Platform.DOUYIN })
+private fun SyncStatusRow(
+    syncStats: List<SyncStat>,
+    syncing: Boolean,
+    syncMessage: String?,
+    onSync: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            SyncChip(label = "微信", stat = syncStats.firstOrNull { it.platform == Platform.WECHAT })
+            SyncChip(label = "抖音", stat = syncStats.firstOrNull { it.platform == Platform.DOUYIN })
+            Spacer(modifier = Modifier.weight(1f))
+            // 立即同步按钮(HyperOS 风格胶囊)
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onSync
+                    )
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Refresh,
+                    contentDescription = "立即同步",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (syncing) "同步中…" else "同步",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        syncMessage?.let {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = it,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

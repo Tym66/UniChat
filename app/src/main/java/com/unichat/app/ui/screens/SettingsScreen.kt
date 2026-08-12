@@ -1,5 +1,6 @@
 package com.unichat.app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -41,6 +42,9 @@ fun SettingsScreen(
     onModeChange: (String) -> Unit,
     onBack: () -> Unit
 ) {
+    // 系统返回键支持
+    BackHandler(onBack = onBack)
+
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // 顶部:返回 + 居中标题(避让摄像头)
         Box(

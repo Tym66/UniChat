@@ -12,6 +12,7 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
  * Xposed 入口。
@@ -59,7 +60,17 @@ class XposedInit : IXposedHookLoadPackage {
  */
 object SqliteHook {
 
+    /** 诊断模式:记录微信/抖音所有数据库写入路径(用于定位真实写库 API,上线置 false) */
+    private const val DIAG = false
+
     private val installed = ConcurrentHashMap.newKeySet<String>()
+
+    /** 应用上下文(在 Application.attach 时捕获,避免初始化早期拿不到) */
+    @Volatile
+    private var appContext: android.content.Context? = null
+
+    /** 应用上下文未就绪前暂存的上报(attach 后补发) */
+    private val pendingReports = ConcurrentLinkedQueue<Pair<Bundle, String>>()
 
     /** 各平台:消息表名集合 */
     private val messageTables = mapOf(
@@ -111,6 +122,33 @@ object SqliteHook {
         }
         XposedBridge.log("[UniChat] 开始安装 Hook: $platform 消息表=${messageTables[platform]} 联系人表=${contactTables[platform]}")
 
+        // 捕获应用 Context(Application.attach 触发),并补发初始化早期未能上报的数据
+        try {
+            XposedHelpers.findAndHookMethod(
+                "android.app.Application",
+                null,
+                "attach",
+                android.content.Context::class.java,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val ctx = param.thisObject as? android.content.Context ?: return
+                        appContext = ctx
+                        var item = pendingReports.poll()
+                        while (item != null) {
+                            try {
+                                doSend(ctx, item.second, item.first)
+                            } catch (t: Throwable) {
+                                XposedBridge.log("[UniChat] 补发失败 ${item.second}: $t")
+                            }
+                            item = pendingReports.poll()
+                        }
+                    }
+                }
+            )
+        } catch (t: Throwable) {
+            XposedBridge.log("[UniChat] Application.attach Hook 失败(忽略): ${t.message}")
+        }
+
         for (cls in databaseClasses) {
             try {
                 hookDatabaseClass(platform, cls, if (cls.startsWith("android.")) null else classLoader)
@@ -137,6 +175,9 @@ object SqliteHook {
                 try {
                     val table = param.args[0] as? String ?: return
                     val values = param.args.firstOrNull { it is ContentValues } as? ContentValues ?: return
+                    if (DIAG) {
+                        XposedBridge.log("[UniChat][w] INSERT ${cl.simpleName} 表=$table keys=${values.keySet().take(10)}")
+                    }
                     if (table in messageTables[platform].orEmpty()) {
                         XposedBridge.log("[UniChat] 捕获消息写入: ${cl.simpleName} 表=$table")
                         reportMessage(platform, values)
@@ -187,6 +228,13 @@ object SqliteHook {
             override fun afterHookedMethod(param: MethodHookParam) {
                 try {
                     val sql = param.args[0] as? String ?: return
+                    if (DIAG) {
+                        val s = sql.trimStart()
+                        val prefix = s.take(6).uppercase()
+                        if (prefix.startsWith("INSERT") || prefix.startsWith("UPDATE") || prefix.startsWith("REPLACE")) {
+                            XposedBridge.log("[UniChat][w] EXECSQL ${cl.simpleName}: ${s.take(140)}")
+                        }
+                    }
                     if (!isTargetTableMentioned(sql, platform)) return
                     val table = parseWriteTable(sql) ?: return
                     if (table in messageTables[platform].orEmpty()) {
@@ -213,6 +261,9 @@ object SqliteHook {
             override fun afterHookedMethod(param: MethodHookParam) {
                 try {
                     val sql = XposedHelpers.getObjectField(param.thisObject, "mSql") as? String ?: return
+                    if (DIAG) {
+                        XposedBridge.log("[UniChat][w] STMT ${cl.simpleName}: ${sql.take(140)}")
+                    }
                     if (!isTargetTableMentioned(sql, platform)) return
                     val table = parseWriteTable(sql) ?: return
                     if (table in messageTables[platform].orEmpty()) {
@@ -477,14 +528,43 @@ object SqliteHook {
 
     /** 跨进程上报:经 ContentResolver.call 写入主应用 Provider */
     private fun sendToApp(bundle: Bundle, method: String) {
-        try {
-            val ctx = XposedHelpers.callStaticMethod(
-                XposedHelpers.findClass("android.app.ActivityThread", null),
-                "currentApplication"
-            ) as android.content.Context
-            ctx.contentResolver.call(UniChatProvider.CONTENT_URI, method, null, bundle)
-        } catch (t: Throwable) {
-            // 主应用未安装或 provider 拒绝,静默
+        val ctx = appContext ?: run {
+            // 兜底:尝试从 ActivityThread 取(应用运行中通常已就绪)
+            try {
+                XposedHelpers.callStaticMethod(
+                    XposedHelpers.findClass("android.app.ActivityThread", null),
+                    "currentApplication"
+                ) as? android.content.Context
+            } catch (t: Throwable) {
+                null
+            }
         }
+        if (ctx == null) {
+            // 应用上下文尚未就绪,暂存待 Application.attach 后补发
+            if (pendingReports.size < 64) {
+                pendingReports.add(bundle to method)
+            } else {
+                XposedBridge.log("[UniChat] 待发队列已满,丢弃: $method")
+            }
+            return
+        }
+        try {
+            val ret = ctx.contentResolver.call(UniChatProvider.CONTENT_URI, method, null, bundle)
+            if (ret != null) {
+                XposedBridge.log("[UniChat] 上报成功: $method ok=${ret.getBoolean("ok")}")
+            } else {
+                XposedBridge.log("[UniChat] 上报被拒(返回 null): $method")
+            }
+        } catch (t: Throwable) {
+            XposedBridge.log("[UniChat] 上报失败: $method -> ${t}")
+        }
+    }
+
+    /** 实际发送(供 attach 补发复用) */
+    private fun doSend(ctx: android.content.Context, method: String, bundle: Bundle) {
+        val ret = ctx.contentResolver.call(UniChatProvider.CONTENT_URI, method, null, bundle)
+        XposedBridge.log(
+            "[UniChat] 上报成功(补发): $method ok=${ret?.getBoolean("ok")}"
+        )
     }
 }

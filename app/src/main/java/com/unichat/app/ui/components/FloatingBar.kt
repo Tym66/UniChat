@@ -1,13 +1,18 @@
 package com.unichat.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
@@ -16,65 +21,105 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.unichat.app.ui.theme.OverlayFill
 
 /**
- * 底部悬浮半透明圆角操作栏:三个简约线性图标按钮(聊天/模块/关于)
- * 跟随主题:暗色下用深色半透明底 + 浅色图标
+ * HyperOS 风格底部悬浮 Dock:半透明圆角胶囊 + 图标 + 文字标签 + 选中高亮
+ * @param selected 当前选中项:0=聊天 1=模块 2=关于
  */
 @Composable
 fun FloatingActionBar(
+    selected: Int,
     onChatClick: () -> Unit,
     onModuleClick: () -> Unit,
     onAboutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val bg = if (MaterialTheme.colorScheme.background == Color.White) {
-        OverlayFill // 浅色:半透明白
+        OverlayFill // 浅色:半透明白(毛玻璃感)
     } else {
-        Color(0xCC1E1E1E) // 深色:半透明深灰
+        Color(0xE61E1E1E) // 深色:半透明深灰
     }
-    val tint = MaterialTheme.colorScheme.onSurfaceVariant
+    val primary = MaterialTheme.colorScheme.primary
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp)
-            .clip(RoundedCornerShape(28.dp))
+            .height(64.dp)
+            .clip(RoundedCornerShape(32.dp))
             .background(bg)
-            .padding(horizontal = 24.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onChatClick) {
-            Icon(
-                imageVector = Icons.Rounded.ChatBubbleOutline,
-                contentDescription = "聊天聚合",
-                tint = tint,
-                modifier = Modifier.size(26.dp)
+        NavItem(
+            icon = Icons.Rounded.ChatBubbleOutline,
+            label = "聊天",
+            selected = selected == 0,
+            primary = primary,
+            onClick = onChatClick
+        )
+        NavItem(
+            icon = Icons.Rounded.Extension,
+            label = "模块",
+            selected = selected == 1,
+            primary = primary,
+            onClick = onModuleClick
+        )
+        NavItem(
+            icon = Icons.Rounded.Info,
+            label = "关于",
+            selected = selected == 2,
+            primary = primary,
+            onClick = onAboutClick
+        )
+    }
+}
+
+/** Dock 单项:图标 + 文字,选中时主题色高亮 + 浅色胶囊底 */
+@Composable
+private fun NavItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    selected: Boolean,
+    primary: Color,
+    onClick: () -> Unit
+) {
+    val tint = if (selected) primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (selected) primary.copy(alpha = 0.14f) else Color.Transparent)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
             )
-        }
-        IconButton(onClick = onModuleClick) {
-            Icon(
-                imageVector = Icons.Rounded.Extension,
-                contentDescription = "模块搜索",
-                tint = tint,
-                modifier = Modifier.size(26.dp)
-            )
-        }
-        IconButton(onClick = onAboutClick) {
-            Icon(
-                imageVector = Icons.Rounded.Info,
-                contentDescription = "关于",
-                tint = tint,
-                modifier = Modifier.size(26.dp)
-            )
-        }
+            .padding(horizontal = 20.dp, vertical = 5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = tint,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal
+        )
     }
 }
 

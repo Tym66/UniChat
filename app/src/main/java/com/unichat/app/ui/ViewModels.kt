@@ -1,5 +1,6 @@
 package com.unichat.app.ui
 
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.unichat.app.data.Contact
@@ -9,6 +10,7 @@ import com.unichat.app.data.ModuleInfo
 import com.unichat.app.data.AppDatabase
 import com.unichat.app.data.SyncStat
 import com.unichat.app.data.repo.ModuleRepoService
+import com.unichat.app.sync.DbSyncManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -50,10 +52,34 @@ class ChatDetailViewModel(private val db: AppDatabase) : ViewModel() {
     }
 }
 
-/** 平台接入状态(诊断):显示微信/抖音是否已接入、最近同步时间 */
-class SyncViewModel(private val db: AppDatabase) : ViewModel() {
+/** 平台接入状态 + 直接读库同步 */
+class SyncViewModel(private val db: AppDatabase, app: Application) : ViewModel() {
     val stats: StateFlow<List<SyncStat>> = db.syncStatDao().observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val syncManager = DbSyncManager(app.applicationContext)
+
+    private val _syncing = MutableStateFlow(false)
+    val syncing: StateFlow<Boolean> = _syncing
+
+    private val _syncMessage = MutableStateFlow<String?>(null)
+    val syncMessage: StateFlow<String?> = _syncMessage
+
+    /** 触发一次直接读库同步 */
+    fun sync() {
+        if (_syncing.value) return
+        viewModelScope.launch {
+            _syncing.value = true
+            try {
+                val r = syncManager.syncAll(db)
+                _syncMessage.value = r.summary
+            } catch (t: Throwable) {
+                _syncMessage.value = "同步失败: ${t.message}"
+            } finally {
+                _syncing.value = false
+            }
+        }
+    }
 }
 
 class ModuleViewModel(

@@ -77,7 +77,7 @@ private fun MainScreen(themeManager: ThemeManager) {
     val context = LocalContext.current
     val chatVm: ChatViewModel = viewModel { ChatViewModel(UniChatApp.instance.database) }
     val moduleVm: ModuleViewModel = viewModel { ModuleViewModel(UniChatApp.instance.database) }
-    val syncVm: SyncViewModel = viewModel { SyncViewModel(UniChatApp.instance.database) }
+    val syncVm: SyncViewModel = viewModel { SyncViewModel(UniChatApp.instance.database, UniChatApp.instance) }
 
     var tab by remember { mutableStateOf(Tab.CHAT) }
     var detailContactId by remember { mutableStateOf(-1L) }
@@ -91,9 +91,12 @@ private fun MainScreen(themeManager: ThemeManager) {
     val loading by moduleVm.loading.collectAsState()
     val error by moduleVm.error.collectAsState()
     val syncStats by syncVm.stats.collectAsState()
+    val syncing by syncVm.syncing.collectAsState()
+    val syncMessage by syncVm.syncMessage.collectAsState()
 
     LaunchedEffect(Unit) {
         moduleVm.refresh() // 首次进入自动拉取一次
+        syncVm.sync()      // 首次进入自动读库同步一次
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -134,6 +137,9 @@ private fun MainScreen(themeManager: ThemeManager) {
                     contacts = contacts,
                     query = query,
                     syncStats = syncStats,
+                    syncing = syncing,
+                    syncMessage = syncMessage,
+                    onSync = { syncVm.sync() },
                     onQueryChange = { chatVm.setQuery(it) },
                     onContactClick = {
                         detailContactId = it.id
@@ -161,6 +167,7 @@ private fun MainScreen(themeManager: ThemeManager) {
         // 底部悬浮操作栏(聊天/模块/关于)
         if (!inDetail && !showAbout && !showSettings) {
             FloatingActionBar(
+                selected = if (tab == Tab.MODULE) 1 else 0,
                 onChatClick = { tab = Tab.CHAT },
                 onModuleClick = { tab = Tab.MODULE },
                 onAboutClick = { showAbout = true },

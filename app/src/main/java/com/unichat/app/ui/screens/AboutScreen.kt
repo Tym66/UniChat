@@ -1,8 +1,11 @@
 package com.unichat.app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,12 +22,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,21 +61,39 @@ fun AboutScreen(
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 系统返回键支持(避免进入后无法退出)
+    BackHandler(onBack = onBack)
+
     Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
 
-        // ===== 顶部:左上标题 + 右上齿轮(避让摄像头) =====
+        // ===== 顶部:返回 + 居中标题 + 右上齿轮(避让摄像头) =====
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(start = 20.dp, end = 20.dp)
-                .padding(vertical = 14.dp)
+                .padding(start = 8.dp, end = 20.dp)
+                .padding(vertical = 12.dp)
         ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                contentDescription = "返回",
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onBack
+                    )
+            )
             Text(
                 text = "关于",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.align(Alignment.Center)
             )
             CircleIconButton(
                 icon = Icons.Rounded.Settings,
