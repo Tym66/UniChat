@@ -39,6 +39,7 @@ import com.unichat.app.data.Direction
 import com.unichat.app.data.Message
 import com.unichat.app.data.MsgType
 import com.unichat.app.data.Platform
+import com.unichat.app.data.SyncStat
 import com.unichat.app.ui.components.ContactCard
 import com.unichat.app.ui.components.SectionTitle
 import com.unichat.app.ui.components.UniSearchBar
@@ -51,6 +52,7 @@ import java.util.Locale
 fun ChatListScreen(
     contacts: List<Contact>,
     query: String,
+    syncStats: List<SyncStat>,
     onQueryChange: (String) -> Unit,
     onContactClick: (Contact) -> Unit,
     modifier: Modifier = Modifier
@@ -72,6 +74,8 @@ fun ChatListScreen(
                 modifier = Modifier.fillMaxWidth()
             )
         }
+        // 平台接入状态条(诊断):显示微信/抖音是否已接入、最近同步
+        SyncStatusRow(syncStats = syncStats)
         UniSearchBar(
             value = query,
             onValueChange = onQueryChange,
@@ -96,6 +100,52 @@ fun ChatListScreen(
                 }
             }
         }
+    }
+}
+
+/** 平台接入状态条:绿点=已接入并最近同步,灰点=未检测到数据流 */
+@Composable
+private fun SyncStatusRow(syncStats: List<SyncStat>) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        SyncChip(label = "微信", stat = syncStats.firstOrNull { it.platform == Platform.WECHAT })
+        SyncChip(label = "抖音", stat = syncStats.firstOrNull { it.platform == Platform.DOUYIN })
+    }
+}
+
+@Composable
+private fun SyncChip(label: String, stat: SyncStat?) {
+    val active = stat?.hookInstalled == true
+    val dotColor = if (active) Color(0xFF34C759) else MaterialTheme.colorScheme.outlineVariant
+    val text = when {
+        stat == null -> "$label 未接入"
+        !active -> "$label 未接入"
+        stat.msgCount > 0 -> "$label 已同步 ${stat.msgCount} 条"
+        else -> "$label 已接入"
+    }
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(dotColor)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = text,
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

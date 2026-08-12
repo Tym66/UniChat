@@ -7,6 +7,7 @@ import com.unichat.app.data.Message
 import com.unichat.app.data.ModuleCategory
 import com.unichat.app.data.ModuleInfo
 import com.unichat.app.data.AppDatabase
+import com.unichat.app.data.SyncStat
 import com.unichat.app.data.repo.ModuleRepoService
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +48,12 @@ class ChatDetailViewModel(private val db: AppDatabase) : ViewModel() {
             db.contactDao().markRead(contactId, System.currentTimeMillis())
         }
     }
+}
+
+/** 平台接入状态(诊断):显示微信/抖音是否已接入、最近同步时间 */
+class SyncViewModel(private val db: AppDatabase) : ViewModel() {
+    val stats: StateFlow<List<SyncStat>> = db.syncStatDao().observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 }
 
 class ModuleViewModel(

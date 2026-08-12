@@ -30,6 +30,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.unichat.app.ui.ChatDetailViewModel
 import com.unichat.app.ui.ChatViewModel
 import com.unichat.app.ui.ModuleViewModel
+import com.unichat.app.ui.SyncViewModel
 import com.unichat.app.ui.ThemeManager
 import com.unichat.app.ui.ThemeMode
 import com.unichat.app.ui.components.FloatingActionBar
@@ -76,6 +77,7 @@ private fun MainScreen(themeManager: ThemeManager) {
     val context = LocalContext.current
     val chatVm: ChatViewModel = viewModel { ChatViewModel(UniChatApp.instance.database) }
     val moduleVm: ModuleViewModel = viewModel { ModuleViewModel(UniChatApp.instance.database) }
+    val syncVm: SyncViewModel = viewModel { SyncViewModel(UniChatApp.instance.database) }
 
     var tab by remember { mutableStateOf(Tab.CHAT) }
     var detailContactId by remember { mutableStateOf(-1L) }
@@ -88,6 +90,7 @@ private fun MainScreen(themeManager: ThemeManager) {
     val modules by moduleVm.modules.collectAsState()
     val loading by moduleVm.loading.collectAsState()
     val error by moduleVm.error.collectAsState()
+    val syncStats by syncVm.stats.collectAsState()
 
     LaunchedEffect(Unit) {
         moduleVm.refresh() // 首次进入自动拉取一次
@@ -130,6 +133,7 @@ private fun MainScreen(themeManager: ThemeManager) {
                 ChatListScreen(
                     contacts = contacts,
                     query = query,
+                    syncStats = syncStats,
                     onQueryChange = { chatVm.setQuery(it) },
                     onContactClick = {
                         detailContactId = it.id

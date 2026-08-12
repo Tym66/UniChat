@@ -24,22 +24,32 @@
 ## 🧩 技术原理
 
 ### Hook 层(核心功能1)
-不依赖微信/抖音内部类名,直接 Hook `android.database.sqlite.SQLiteDatabase` 的写入层:
+不依赖微信/抖音内部类名,直接 Hook 数据库写入层。微信实际使用自家 **WCDB** 写库,因此同时拦截三条路径:
+
+- `com.tencent.wcdb.database.SQLiteDatabase`(微信 WCDB 真实写库路径)
+- `android.database.sqlite.SQLiteDatabase`(系统框架,抖音等)
+- `SQLiteStatement` 编译语句(框架 + WCDB,兜底)
 
 ```
 微信/抖音进程
    │  (LSPosed 注入)
    ▼
-SQLiteDatabase.insertWithOnConflict / updateWithOnConflict
+SQLiteDatabase(WCDB/框架).insert* / update* / execSQL
    │  识别消息表/联系人表,字段语义映射
    ▼
 ContentResolver.call → UniChatProvider(跨进程)
-   │  联系人归并 / 消息去重 / 未读计数
+   │  联系人归并(手机号跨平台) / 消息去重 / 已读同步 / 同步统计
    ▼
 Room 数据库 → Compose UI 实时刷新
 ```
 
-这样的好处:微信/抖音升级也不容易失效,因为表结构字段名长期稳定。
+覆盖的能力:
+- **消息聚合**:微信/抖音新消息实时写入统一会话
+- **跨平台归并**:同一人微信+抖音的资料按手机号自动归并,一人一会话
+- **已读同步**:一个平台读了,另一个平台同步标记已读
+- **同步诊断**:聊天页顶部显示微信/抖音接入状态与最近同步条数
+
+这样的好处:微信/抖音升级也不容易失效,因为 WCDB 表结构与字段名长期稳定。
 
 ### UI 层
 - Jetpack Compose + Material 3

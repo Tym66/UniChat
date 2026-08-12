@@ -29,6 +29,10 @@ interface ContactDao {
     @Query("SELECT * FROM contacts WHERE wechatId = :platformId OR douyinId = :platformId OR phone = :platformId LIMIT 1")
     suspend fun findByPlatformId(platformId: String): Contact?
 
+    /** 按手机号查找联系人(用于跨平台归并) */
+    @Query("SELECT * FROM contacts WHERE phone = :phone LIMIT 1")
+    suspend fun findByPhone(phone: String): Contact?
+
     @Query("UPDATE contacts SET unreadCount = unreadCount + 1, lastMessage = :lastMsg, lastTime = :ts, updatedAt = :now WHERE id = :contactId")
     suspend fun bump(contactId: Long, lastMsg: String, ts: Long, now: Long)
 

@@ -8,11 +8,13 @@ import android.net.Uri
 import android.os.Binder
 import android.os.Bundle
 import com.unichat.app.data.Contact
+import com.unichat.app.data.ContactDao
 import com.unichat.app.data.Direction
 import com.unichat.app.data.Message
 import com.unichat.app.data.MsgType
 import com.unichat.app.data.Platform
 import com.unichat.app.data.AppDatabase
+import com.unichat.app.data.SyncStat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,6 +40,20 @@ class UniChatProvider : ContentProvider() {
         if (!checkCaller()) return null
         val db = AppDatabase.get(context!!)
         return when (method) {
+            METHOD_HOOK_HELLO -> {
+                // 模块已注入目标进程(心跳),记录接入状态
+                val platform = extras?.getString(KEY_PLATFORM) ?: return null
+                scope.launch {
+                    db.syncStatDao().upsert(
+                        SyncStat(
+                            platform = platform,
+                            hookInstalled = true,
+                            lastSyncAt = System.currentTimeMillis()
+                        )
+                    )
+                }
+                Bundle().apply { putBoolean("ok", true) }
+            }
             METHOD_INGEST_MESSAGE -> {
                 val msg = extras?.toMessage() ?: return null
                 scope.launch {
@@ -49,6 +65,7 @@ class UniChatProvider : ContentProvider() {
                             db.contactDao().bump(contactId, m.content.take(50), m.timestamp, System.currentTimeMillis())
                         }
                     }
+                    bumpSync(db, msg.platform)
                 }
                 Bundle().apply { putBoolean("ok", true) }
             }
@@ -56,24 +73,31 @@ class UniChatProvider : ContentProvider() {
                 val c = extras?.toContact() ?: return null
                 scope.launch {
                     val dao = db.contactDao()
-                    val existing = dao.findByPlatformId(
-                        if (c.wechatId.isNotBlank()) c.wechatId else c.douyinId
-                    )
+                    val existing = findMatchingContact(dao, c)
                     if (existing == null) dao.insert(c)
                     else {
                         val merged = mergeContact(existing, c)
                         dao.update(merged)
                     }
+                    bumpSync(db, c.platforms)
                 }
                 Bundle().apply { putBoolean("ok", true) }
             }
             METHOD_MARK_READ -> {
-                val contactId = extras?.getLong(KEY_CONTACT_ID) ?: 0L
+                // 已读同步:优先按平台+联系人 id;若只有平台 peer id(Hook 场景)则解析为联系人 id
                 val platform = extras?.getString(KEY_PLATFORM) ?: ""
-                if (contactId > 0) {
+                val peerId = extras?.getString(KEY_PEER_ID) ?: ""
+                val directId = extras?.getLong(KEY_CONTACT_ID) ?: 0L
+                if (platform.isNotBlank()) {
                     scope.launch {
-                        db.messageDao().markPlatformRead(contactId, platform)
-                        db.contactDao().markRead(contactId, System.currentTimeMillis())
+                        var contactId = directId
+                        if (contactId <= 0 && peerId.isNotBlank()) {
+                            contactId = db.contactDao().findByPlatformId(peerId)?.id ?: 0L
+                        }
+                        if (contactId > 0) {
+                            db.messageDao().markPlatformRead(contactId, platform)
+                            db.contactDao().markRead(contactId, System.currentTimeMillis())
+                        }
                     }
                 }
                 Bundle().apply { putBoolean("ok", true) }
@@ -94,14 +118,42 @@ class UniChatProvider : ContentProvider() {
     ): Long {
         val peer = extras.getString(KEY_PEER_ID) ?: return 0L
         val peerName = extras.getString(KEY_PEER_NAME) ?: peer
+        val phone = extras.getString(KEY_PHONE) ?: ""
         val dao = db.contactDao()
-        val existing = dao.findByPlatformId(peer)
-        if (existing != null) {
-            return existing.id
+
+        // 1. 该平台 ID 已存在 → 直接命中
+        dao.findByPlatformId(peer)?.let { return it.id }
+
+        // 2. 携带了手机号 → 跨平台归并(微信/抖音联系人资料通常带手机号)
+        if (phone.isNotBlank()) {
+            val byPhone = dao.findByPhone(phone)
+            if (byPhone != null) {
+                val updated = if (msg.platform == Platform.WECHAT)
+                    byPhone.copy(wechatId = peer, platforms = mergePlatforms(byPhone.platforms, msg.platform))
+                else
+                    byPhone.copy(douyinId = peer, platforms = mergePlatforms(byPhone.platforms, msg.platform))
+                dao.update(updated)
+                return byPhone.id
+            }
         }
+
+        // 3. 平台 ID 本身就是手机号(如短信会话) → 按手机号归并
+        if (isPhoneLike(peer)) {
+            val byPhone = dao.findByPhone(peer)
+            if (byPhone != null) {
+                val updated = if (msg.platform == Platform.WECHAT)
+                    byPhone.copy(wechatId = peer, platforms = mergePlatforms(byPhone.platforms, msg.platform))
+                else
+                    byPhone.copy(douyinId = peer, platforms = mergePlatforms(byPhone.platforms, msg.platform))
+                dao.update(updated)
+                return byPhone.id
+            }
+        }
+
         // 创建新联系人
         val contact = Contact(
             name = peerName,
+            phone = phone,
             wechatId = if (msg.platform == Platform.WECHAT) peer else "",
             douyinId = if (msg.platform == Platform.DOUYIN) peer else "",
             platforms = msg.platform,
@@ -110,9 +162,22 @@ class UniChatProvider : ContentProvider() {
         return dao.insert(contact)
     }
 
+    /** 联系人入库时寻找可归并的既有联系人(同平台 ID / 同手机号) */
+    private suspend fun findMatchingContact(
+        dao: ContactDao,
+        c: Contact
+    ): Contact? {
+        val platformId = if (c.wechatId.isNotBlank()) c.wechatId else c.douyinId
+        if (platformId.isNotBlank()) {
+            dao.findByPlatformId(platformId)?.let { return it }
+        }
+        if (c.phone.isNotBlank()) {
+            dao.findByPhone(c.phone)?.let { return it }
+        }
+        return null
+    }
+
     private fun mergeContact(old: Contact, incoming: Contact): Contact {
-        val platforms = (old.platforms.split(",") + incoming.platforms.split(","))
-            .filter { it.isNotBlank() }.distinct().joinToString(",")
         return old.copy(
             name = incoming.name.ifBlank { old.name },
             phone = incoming.phone.ifBlank { old.phone },
@@ -120,8 +185,36 @@ class UniChatProvider : ContentProvider() {
             douyinId = incoming.douyinId.ifBlank { old.douyinId },
             remark = incoming.remark.ifBlank { old.remark },
             avatarPath = incoming.avatarPath.ifBlank { old.avatarPath },
-            platforms = platforms,
+            platforms = mergePlatforms(old.platforms, incoming.platforms),
             updatedAt = System.currentTimeMillis()
+        )
+    }
+
+    private fun mergePlatforms(old: String, new: String): String {
+        return (old.split(",") + new.split(","))
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString(",")
+    }
+
+    /** 平台 ID 形如手机号(纯数字 7~15 位) */
+    private fun isPhoneLike(s: String): Boolean {
+        val digits = s.filter { it.isDigit() }
+        return digits.isNotEmpty() && digits == s && digits.length in 7..15
+    }
+
+    /** 记录平台同步统计(最近时间 + 累计条数) */
+    private suspend fun bumpSync(db: AppDatabase, platform: String) {
+        if (platform.isBlank()) return
+        val dao = db.syncStatDao()
+        val cur = dao.get(platform)
+        dao.upsert(
+            SyncStat(
+                platform = platform,
+                hookInstalled = cur?.hookInstalled ?: true,
+                lastSyncAt = System.currentTimeMillis(),
+                msgCount = (cur?.msgCount ?: 0) + 1
+            )
         )
     }
 
@@ -154,6 +247,7 @@ class UniChatProvider : ContentProvider() {
         const val METHOD_INGEST_CONTACT = "ingest_contact"
         const val METHOD_MARK_READ = "mark_read"
         const val METHOD_MARK_READ_BY_PLATFORM_MSG = "mark_read_by_platform_msg"
+        const val METHOD_HOOK_HELLO = "hook_hello"
 
         // Bundle keys
         const val KEY_PLATFORM = "platform"
