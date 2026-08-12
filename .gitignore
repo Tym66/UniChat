@@ -1,10 +1,10 @@
-# Gradle
+﻿# Gradle
 .gradle/
 build/
 app/build/
 **/build/
 
-# 本地配置(含 SDK 路径,勿提交)
+# 鏈湴閰嶇疆(鍚?SDK 璺緞,鍕挎彁浜?
 local.properties
 *.jks
 *.keystore
@@ -17,19 +17,19 @@ signing.properties
 .DS_Store
 captures/
 
-# 构建日志 / 崩溃转储
+# 鏋勫缓鏃ュ織 / 宕╂簝杞偍
 *.log
 hs_err_pid*.log
 replay_pid*.log
 
-# 系统
+# 绯荤粺
 Thumbs.db
 Desktop.ini
 
 # Kotlin
 .kotlin/
 
-# 调试 / 真机产物(勿提交)
+# 璋冭瘯 / 鐪熸満浜х墿(鍕挎彁浜?
 .logcap*.txt
 .lspd_tmp/
 .phone_db/
@@ -40,10 +40,15 @@ build_err.txt
 build_tail.txt
 *.apk
 
-# ������ʱ�ļ�
+# 调试临时文件
 .designskills/
 .hdr.bin
-.ksu/.phone_db/.wxdb/.dytmp/.lspd_tmp/
+.ksu/
+.phone_db/
+.wxdb/
+.dytmp/
+.lspd_tmp/
 build_tail.txt
-build_err.txt.logcap*
-
+build_err.txt
+.logcap*
+.q.sql
