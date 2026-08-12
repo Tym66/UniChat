@@ -113,7 +113,8 @@ class DbSyncManager(private val appContext: Context) {
                     content = jo.optString("content"),
                     timestamp = jo.optLong("timestamp")
                 )
-                if (IngestHelper.ingestMessage(db, m, peer, peer)) inserted++
+                val peerName = parseDouyinPeerName(peer)
+                if (IngestHelper.ingestMessage(db, m, peer, peerName)) inserted++
             } catch (t: Throwable) {
                 // 单条解析失败跳过
             }
@@ -122,6 +123,12 @@ class DbSyncManager(private val appContext: Context) {
         runSu("rm -f $inboxPath")
         if (inserted > 0) Log.i(TAG, "抖音 inbox 文件通道: 新入库 $inserted 条")
         return inserted
+    }
+
+    /** 解析抖音 conversation_id("0:1:<对端>:<自己>")取对端 id 作显示名 */
+    private fun parseDouyinPeerName(peer: String): String {
+        val parts = peer.split(":")
+        return if (parts.size >= 4 && parts[2].isNotBlank()) parts[2] else peer
     }
 
     // ==================== root 工具 ====================
