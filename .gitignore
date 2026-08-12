@@ -28,3 +28,14 @@ Desktop.ini
 
 # Kotlin
 .kotlin/
+
+# 调试 / 真机产物(勿提交)
+.logcap*.txt
+.lspd_tmp/
+.phone_db/
+.wxdb/
+.q.sql
+wx.db
+build_err.txt
+build_tail.txt
+*.apk
