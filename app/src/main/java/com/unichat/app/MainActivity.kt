@@ -40,6 +40,7 @@ import com.unichat.app.ui.screens.ChatListScreen
 import com.unichat.app.ui.screens.ModuleSearchScreen
 import com.unichat.app.ui.screens.SettingsScreen
 import com.unichat.app.ui.theme.UniChatTheme
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
 
@@ -97,6 +98,11 @@ private fun MainScreen(themeManager: ThemeManager) {
     LaunchedEffect(Unit) {
         moduleVm.refresh() // 首次进入自动拉取一次
         syncVm.sync()      // 首次进入自动读库同步一次
+        // 前台时周期自动同步(抖音新消息自动出现)
+        while (true) {
+            delay(45_000)
+            syncVm.sync()
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {

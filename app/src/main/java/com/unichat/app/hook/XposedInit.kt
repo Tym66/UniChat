@@ -61,7 +61,7 @@ class XposedInit : IXposedHookLoadPackage {
 object SqliteHook {
 
     /** 诊断模式:记录微信/抖音所有数据库写入路径(用于定位真实写库 API,上线置 false) */
-    private const val DIAG = true
+    private const val DIAG = false
 
     private val installed = ConcurrentHashMap.newKeySet<String>()
 
@@ -97,13 +97,15 @@ object SqliteHook {
     /** 需要拦截的数据库实现类 */
     private val databaseClasses = listOf(
         "android.database.sqlite.SQLiteDatabase",       // 系统框架(抖音)
-        "com.tencent.wcdb.database.SQLiteDatabase"      // 微信 WCDB
+        "com.tencent.wcdb.database.SQLiteDatabase",     // 微信 WCDB 主类
+        "com.tencent.wcdb.compat.SQLiteDatabase"        // 微信 WCDB 兼容层(WeKit 也 hook 这里)
     )
 
     /** 需要拦截的编译语句类 */
     private val statementClasses = listOf(
         "android.database.sqlite.SQLiteStatement",
-        "com.tencent.wcdb.database.SQLiteStatement"
+        "com.tencent.wcdb.database.SQLiteStatement",
+        "com.tencent.wcdb.compat.SQLiteStatement"
     )
 
     /** 消息 ID 候选列(优先大字段,避免 HashSet 顺序不确定导致选到行 id) */

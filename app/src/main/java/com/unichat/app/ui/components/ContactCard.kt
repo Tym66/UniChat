@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +26,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import com.unichat.app.data.Contact
 import com.unichat.app.data.Platform
 import com.unichat.app.ui.designsystem.theme.neumorphic3D
@@ -45,20 +48,35 @@ fun ContactCard(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 头像(首字母)
+        // 头像(有网络头像用图片,否则首字母)
         Box(
             modifier = Modifier
                 .size(46.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
+                .clip(CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = contact.name.take(1).ifBlank { "?" },
-                color = MaterialTheme.colorScheme.onPrimary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
+            if (contact.avatarPath.startsWith("http")) {
+                AsyncImage(
+                    model = contact.avatarPath,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = contact.name.take(1).ifBlank { "?" },
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {

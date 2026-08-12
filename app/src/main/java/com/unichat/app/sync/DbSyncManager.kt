@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import org.json.JSONObject
 import com.unichat.app.data.AppDatabase
+import com.unichat.app.data.Contact
 import com.unichat.app.data.Direction
 import com.unichat.app.data.IngestHelper
 import com.unichat.app.data.Message
@@ -163,16 +164,42 @@ class DbSyncManager(private val appContext: Context) {
         var inserted = 0
         val lastMsgId = prefs.getLong(KEY_DOUYIN_LAST, 0L)
         SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { sql ->
-            // 会话名 + 当前账号 uid(group_owner_id 即本机账号)
+            // 会话名 + 头像 + 当前账号 uid(group_owner_id 即本机账号)
             val convNames = HashMap<String, String>()
+            val convAvatars = HashMap<String, String>()
             var selfId: String? = null
-            sql.rawQuery("SELECT conversation_id, name, group_owner_id FROM im_conversation", null).use { c ->
+            sql.rawQuery("SELECT conversation_id, name, group_owner_id, icon_image FROM im_conversation", null).use { c ->
                 while (c.moveToNext()) {
                     val cid = c.getString(0)
                     val name = c.getString(1)
                     if (!name.isNullOrBlank()) convNames[cid] = name
+                    val icon = c.getString(3)
+                    if (!icon.isNullOrBlank()) {
+                        try {
+                            val url = JSONObject(icon).optJSONObject("image_thumb")
+                                ?.optString("url", "")
+                                ?.takeIf { it.isNotBlank() }
+                            if (url != null) convAvatars[cid] = url
+                        } catch (t: Throwable) {
+                            // 头像解析失败不影响
+                        }
+                    }
                     if (selfId == null) selfId = c.getString(2)
                 }
+            }
+
+            // 同步联系人资料(名称 + 头像,按会话 id 归并)
+            val convIds = (convNames.keys + convAvatars.keys).toSet()
+            for (cid in convIds) {
+                IngestHelper.ingestContact(
+                    db,
+                    Contact(
+                        name = convNames[cid] ?: cid,
+                        douyinId = cid,
+                        avatarPath = convAvatars[cid] ?: "",
+                        platforms = Platform.DOUYIN
+                    )
+                )
             }
 
             // 增量读新消息(message_id 数字递增)

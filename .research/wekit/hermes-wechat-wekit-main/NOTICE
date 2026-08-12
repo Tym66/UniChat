@@ -1,0 +1,20 @@
+hermes-wechat-wekit
+Copyright (c) 2026 the hermes-wechat-wekit contributors
+
+This project is a client. It talks to, but does not bundle or redistribute,
+the following third-party components:
+
+  WeKit — https://github.com/Ujhhgtg/WeKit
+      The Xposed/LSPosed module that hooks WeChat and exposes the HTTP + MCP
+      API this plugin drives. WeKit must be installed separately on the phone,
+      and its own licence and terms apply to it. All credit for the WeChat
+      hooking work belongs to that project.
+
+  Hermes Agent — https://github.com/NousResearch/hermes-agent
+      The agent runtime this plugin registers a platform with. Installed
+      separately; its licence applies to it.
+
+Runtime dependency: httpx (BSD-3-Clause).
+
+WeChat is a trademark of Tencent Holdings Ltd. This project is not affiliated
+with, endorsed by, or connected to Tencent in any way.

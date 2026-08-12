@@ -1,0 +1,15 @@
+.env
+*.log
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.bak-*
+.pytest_cache/
+.ruff_cache/
+
+# macOS / editor cruft
+.DS_Store
+.idea/
+.vscode/
+*.swp

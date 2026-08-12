@@ -1,0 +1,46 @@
+name: wechat-wekit-platform
+label: WeChat (WeKit)
+kind: platform
+version: 0.1.0
+description: >
+  Full WeChat channel for Hermes via the WeKit LSPosed module running inside the
+  real WeChat app on a rooted Android phone. Unlike the phone-UI adapter, this
+  reads and sends at WeChat's database layer through WeKit's HTTP+MCP API, so it
+  gets private and group messaging, contacts and history, and inbound messages
+  never depend on notifications. Outbound is REST POST /api/messages/text;
+  inbound is the MCP wait-for-new-message long-poll.
+license: MIT
+required_env:
+  - name: WEKIT_TOKEN
+    description: "Bearer token set in WeKit's API+MCP server settings on the phone. Use a long random string: it is the only thing guarding full read/send access to the account."
+    prompt: "WeKit API token"
+    password: true
+  - name: WEKIT_BASE_URL
+    description: "Where the phone's WeKit API is reachable from this host, e.g. http://192.168.1.50:3001. Different subnets: see transport/README.md."
+    prompt: "WeKit base URL"
+    password: false
+optional_env:
+  - name: WEKIT_POLL_TIMEOUT_MS
+    description: "wait-for-new-message long-poll timeout in ms (min 5000, default 30000). The HTTP read timeout is derived from this, so raising it is safe."
+    prompt: "Inbound poll timeout (ms)"
+    password: false
+  - name: WEKIT_HOME_CHANNEL
+    description: "Default WeChat convId for cron deliver=wechat-wekit jobs"
+    prompt: "Default contact/group convId for scheduled deliveries"
+    password: false
+  - name: WEKIT_ALLOWED_USERS
+    description: "Comma-separated wxIds allowed to talk to the agent; empty means everyone. Inbound filter only. Find the real value in agent.log ('inbound from <wxid>') rather than guessing from the contact list."
+    prompt: "Allowed contacts"
+    password: false
+  - name: WEKIT_ALLOW_ALL_USERS
+    description: "Set 1/true to accept messages from any contact. Unsafe: anyone who messages the account reaches your agent."
+    prompt: "Allow all contacts? (true/false)"
+    password: false
+  - name: WEKIT_ALLOWED_LABEL
+    description: "Name of a WeChat contact label (标签) whose members may talk to the agent. Resolved at connect time and merged into WEKIT_ALLOWED_USERS, so access is managed from the phone instead of .env. A label that fails to resolve is ignored, never treated as allow-everyone."
+    prompt: "Allow-list label"
+    password: false
+  - name: WEKIT_ENABLE_WRITE_ACTIONS
+    description: "Set 1/true to let the agent take actions that change the account or are visible to others: accept friend requests, add/remove/invite group members, assign contact labels, post to Moments. Off by default; the read-only and send-a-message tools work regardless."
+    prompt: "Enable account-changing actions? (true/false)"
+    password: false
