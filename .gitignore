@@ -52,3 +52,8 @@ build_tail.txt
 build_err.txt
 .logcap*
 .q.sql
+
+.ui*.xml
+.ui*.png
+.uf*.xml
+
